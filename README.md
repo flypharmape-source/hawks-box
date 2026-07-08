@@ -1,55 +1,43 @@
-# Hawks Box — Placar de Campeonato
+# Hawks Box — Placar de Campeonato (multi-box)
 
-Sistema de gestão de campeonatos (estilo CrossFit) com dois sistemas de pontuação
-(pontos por colocação · mais vence / invertido · menos vence), salvando os dados
-num banco Postgres na nuvem. Site, API e banco rodam no Railway.
+Sistema de campeonatos (estilo CrossFit) com login, dois sistemas de pontuação
+(pontos por colocação / invertido), separação por empresa (box) e um admin global.
+
+## Como funciona o acesso
+- Cada empresa/box se **cadastra** (Cadastre-se) informando os dados da empresa.
+  Quem se cadastra vira o dono ("owner") daquela box.
+- Cada usuário enxerga **apenas os campeonatos da sua própria box**.
+- O **admin global** enxerga os campeonatos de **todas as boxes**. O admin não é criado
+  pela tela de cadastro: ele vem das variáveis de ambiente (abaixo).
 
 ## Arquitetura
-Navegador (site em `public/index.html`) → API Node/Express (`server.js`) → Postgres.
+Navegador → API Node/Express (`server.js`) → Postgres (tabelas: boxes, users, championships).
 
-## Subir no Railway
+## Variáveis de ambiente no Railway (serviço do site)
+- `DATABASE_URL`  → referência ao Postgres: `${{Postgres.DATABASE_URL}}`
+- `JWT_SECRET`    → um texto secreto longo e aleatório (assina os logins)
+- `ADMIN_EMAIL`   → e-mail do admin global (ex.: voce@hawks.com)
+- `ADMIN_PASSWORD`→ senha do admin global (troque depois; muda por aqui a qualquer momento)
+- `ADMIN_NAME`    → (opcional) nome do admin
+- `PORT`          → injetado pelo Railway automaticamente
 
-### 1. Mandar o código pro GitHub
-Crie um repositório e suba estes arquivos (sem a pasta `node_modules`):
-```
-server.js
-package.json
-package-lock.json
-.gitignore
-public/index.html
-```
+O admin é criado/atualizado toda vez que o app sobe, a partir de ADMIN_EMAIL/ADMIN_PASSWORD.
+Para trocar a senha do admin, mude ADMIN_PASSWORD e redeploy.
 
-### 2. Criar o serviço no Railway
-- No Railway: **New Project → Deploy from GitHub repo** e escolha o repositório.
-- O Railway detecta Node automaticamente e roda `npm install` + `npm start`.
+## Passos
+1. Suba os arquivos no GitHub mantendo `public/index.html` dentro da pasta `public`.
+2. Railway: Deploy from GitHub repo + Add PostgreSQL.
+3. Variables do site: DATABASE_URL (referência), JWT_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD.
+4. Redeploy → Settings → Networking → Generate Domain.
+5. Boxes se cadastram pela tela "Cadastre-se"; você entra como admin com ADMIN_EMAIL/senha.
 
-### 3. Adicionar o banco
-- Dentro do mesmo projeto: **New → Database → Add PostgreSQL**.
-
-### 4. Conectar o site ao banco (passo que mais gera dúvida)
-- Abra o serviço do **site** → aba **Variables** → **New Variable**.
-- Crie a variável `DATABASE_URL` e, no valor, use a referência do Postgres:
-  `${{Postgres.DATABASE_URL}}`
-  (o Railway oferece "Add Reference" / "Variable Reference" — selecione o serviço Postgres e a variável `DATABASE_URL`).
-- O `PORT` o Railway injeta sozinho; não precisa configurar.
-
-### 5. Gerar o link público
-- No serviço do site: **Settings → Networking → Generate Domain**.
-- Abra o domínio gerado. Na primeira vez, o servidor cria a tabela sozinho.
-
-Pronto: você e seu sócio acessam o mesmo placar pelo link, de qualquer aparelho.
-
-## Rodar no seu computador (opcional)
+## Rodar localmente
 ```
 npm install
-DATABASE_URL="sua_string_do_postgres" npm start
-# abra http://localhost:3000
+DATABASE_URL="..." JWT_SECRET="..." ADMIN_EMAIL="a@a.com" ADMIN_PASSWORD="admin123" npm start
 ```
 
-## Observações
-- **Dados compartilhados:** ficam no Postgres, então todos veem o mesmo placar.
-  O botão **Sincronizar** (no placar) puxa a versão mais recente do servidor.
-- **Edição simultânea:** cada campeonato é salvo por inteiro; se duas pessoas
-  editarem o MESMO campeonato ao mesmo tempo, a última gravação prevalece.
-  Para um placar 100% ao vivo (sem precisar sincronizar na mão), o próximo passo
-  seria atualização em tempo real (WebSocket) — dá pra adicionar depois.
+## Próximos passos possíveis
+- Vários usuários por box (hoje o cadastro cria 1 dono por box).
+- Papéis dentro da box (juiz que só lança resultado).
+- Placar ao vivo por WebSocket (sem apertar Sincronizar).
