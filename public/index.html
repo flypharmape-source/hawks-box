@@ -191,8 +191,64 @@
   .footnote{margin-top:14px;font-size:12px;color:var(--steel)}
   a{color:var(--arc)}
   @media print{.topbar,.tabs,.modebox,.btn,.no-print{display:none!important}.card{border:none;padding:0}}
+
+  /* ---------- userchip / logout ---------- */
+  .userchip{font-size:12px;color:var(--steel);font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .userchip b{color:var(--chalk)}
+
+  /* ---------- tela de login ---------- */
+  .auth{display:grid;grid-template-columns:1.12fr .88fr;min-height:100vh}
+  .auth-hero{
+    position:relative;overflow:hidden;padding:54px 52px;
+    display:flex;flex-direction:column;justify-content:space-between;gap:40px;
+    background:
+      radial-gradient(120% 90% at 15% 0%, rgba(248,37,132,.22), transparent 55%),
+      linear-gradient(160deg,#0A1338 0%,#040B26 60%);
+  }
+  .auth-hero::after{
+    content:'';position:absolute;inset:0;opacity:.5;pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M0 34 L23 12 L46 34' stroke='%23F82584' stroke-width='2' fill='none' opacity='0.07'/%3E%3C/svg%3E");
+  }
+  .auth-hero > *{position:relative;z-index:1}
+  .auth-logo{font-family:'Anton';font-size:30px;letter-spacing:1px;text-transform:uppercase;color:#fff}
+  .auth-logo b{font-weight:400;background:linear-gradient(180deg,var(--arc-hi),var(--arc));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .auth-logo .tag{display:block;font-family:'Archivo';font-size:10px;letter-spacing:3px;color:var(--arc-hi);margin-top:4px;font-weight:600}
+  .auth-headline{font-family:'Anton';font-weight:400;font-size:min(4.4vw,50px);line-height:1.02;text-transform:uppercase;letter-spacing:.5px}
+  .auth-headline .pink{background:linear-gradient(120deg,var(--arc-hi),var(--arc));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .auth-sub{color:var(--steel);font-size:15px;max-width:440px;margin-top:16px;line-height:1.6}
+  .auth-feats{list-style:none;padding:0;margin:22px 0 0;display:flex;flex-direction:column;gap:10px}
+  .auth-feats li{display:flex;gap:10px;align-items:center;color:var(--chalk);font-size:14px;font-weight:500}
+  .auth-feats .tick{color:var(--arc);font-weight:700}
+
+  .auth-form-wrap{display:flex;align-items:center;justify-content:center;padding:36px 28px;background:var(--pit)}
+  .auth-card{width:100%;max-width:390px}
+  .auth-card h2{font-family:'Anton';font-weight:400;font-size:26px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+  .auth-card .lead{color:var(--steel);font-size:14px;margin-bottom:24px}
+  .auth-field{margin-bottom:16px}
+  .auth-field label{display:block;font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--steel);margin:0 0 7px;font-weight:600}
+  .auth-input{position:relative}
+  .auth-input input{width:100%;background:var(--raised);border:1px solid var(--line);color:var(--chalk);border-radius:11px;padding:13px 14px;font-size:15px;font-family:inherit}
+  .auth-input .eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--steel);cursor:pointer;font-size:15px;padding:4px}
+  .auth-btn{width:100%;border:none;border-radius:11px;padding:14px;font-size:15px;font-weight:700;color:#fff;cursor:pointer;background:linear-gradient(135deg,var(--arc-hi),var(--arc));margin-top:6px}
+  .auth-btn:hover{filter:brightness(1.08)}
+  .auth-btn:disabled{opacity:.6;cursor:default;filter:none}
+  .auth-alt{text-align:center;color:var(--steel);font-size:13.5px;margin-top:22px}
+  .auth-link{background:none;border:none;color:var(--arc-hi);font-weight:700;cursor:pointer;font-size:13.5px;font-family:inherit;padding:0}
+  .auth-link.small{display:block;margin:-6px 0 4px auto;font-weight:600;color:var(--steel)}
+  .auth-msg{font-size:13.5px;border-radius:9px;padding:10px 12px;margin-bottom:16px;display:none}
+  .auth-msg.err{display:block;background:rgba(255,90,122,.12);border:1px solid rgba(255,90,122,.35);color:#ff8fa3}
+  .auth-msg.ok{display:block;background:rgba(54,194,107,.12);border:1px solid rgba(54,194,107,.35);color:#7fe0a5}
+  @media(max-width:840px){
+    .auth{grid-template-columns:1fr}
+    .auth-hero{min-height:auto;padding:38px 30px;gap:22px}
+    .auth-feats{display:none}
+    .auth-headline{font-size:32px}
+  }
 </style>
 
+<div id="authscreen"></div>
+
+<div id="appscreen" style="display:none">
 <div class="topbar">
   <div class="inner">
     <div class="brand">
@@ -203,16 +259,32 @@
     <span id="sync" class="sync"></span>
     <select id="champPick" class="champ-pick no-print" title="Trocar campeonato"></select>
     <button class="btn sm" id="newChampBtn">+ Novo</button>
+    <span id="userchip" class="userchip no-print"></span>
+    <button class="btn sm ghost no-print" id="logoutBtn">Sair</button>
   </div>
 </div>
 
 <div class="wrap" id="app"></div>
+</div>
 
 <script>
 /* ============================ estado + API (banco) ============================ */
 const ACTKEY = 'hawksbox:active';   // lembra qual campeonato estava aberto neste navegador
+const TOKKEY = 'hawksbox:token';
 let state = { champs: [], activeId: null };
 let ui = { tab: 'placar', resEvent: null, open: {} };
+let AUTH = { token: null, user: null };
+
+function getToken(){ try{ return localStorage.getItem(TOKKEY)||''; }catch(e){ return ''; } }
+function setToken(t){ AUTH.token=t||null; try{ t?localStorage.setItem(TOKKEY,t):localStorage.removeItem(TOKKEY); }catch(e){} }
+
+// fetch com token; se o servidor devolver 401, volta pra tela de login
+async function authFetch(url, opts={}){
+  const h = Object.assign({}, opts.headers||{}, AUTH.token?{Authorization:'Bearer '+AUTH.token}:{});
+  const res = await fetch(url, Object.assign({}, opts, {headers:h}));
+  if(res.status===401){ logout(); throw new Error('sessão expirada'); }
+  return res;
+}
 
 function uid(){ return Math.random().toString(36).slice(2,9); }
 function active(){ return state.champs.find(c=>c.id===state.activeId) || null; }
@@ -220,9 +292,9 @@ function setActive(id){ state.activeId = id; try{ localStorage.setItem(ACTKEY, i
 
 async function load(){
   try{
-    const res = await fetch('/api/championships');
+    const res = await authFetch('/api/championships');
     if(res.ok){ const arr = await res.json(); state.champs = Array.isArray(arr)?arr:[]; }
-  }catch(e){ /* sem conexão: segue com o que tiver */ }
+  }catch(e){ /* sem conexão ou sessão expirada */ }
   let want=null; try{ want = localStorage.getItem(ACTKEY); }catch(e){}
   state.activeId = (want && state.champs.find(c=>c.id===want)) ? want : (state.champs[0]?.id || null);
 }
@@ -236,11 +308,11 @@ function save(){
 }
 async function putChamp(c){
   try{
-    const r = await fetch('/api/championships/'+c.id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)});
+    const r = await authFetch('/api/championships/'+c.id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)});
     setSync(r.ok ? 'saved' : 'error');
   }catch(e){ setSync('error'); }
 }
-async function delChampApi(id){ try{ await fetch('/api/championships/'+id, {method:'DELETE'}); }catch(e){} }
+async function delChampApi(id){ try{ await authFetch('/api/championships/'+id, {method:'DELETE'}); }catch(e){} }
 async function syncFromServer(){ setSync('saving'); await load(); render(); setSync('saved'); }
 
 function setSync(s){
@@ -522,6 +594,91 @@ window.exportCSV = ()=>{
   a.download=(c.name||'campeonato').replace(/[^\w-]+/g,'_')+'.csv'; a.click();
 };
 
+el('#logoutBtn').addEventListener('click', ()=>logout());
+
+/* ============================ login / cadastro ============================ */
+let authMode = 'login';   // 'login' | 'register'
+
+function renderAuth(){
+  const box = el('#authscreen');
+  const isReg = authMode==='register';
+  box.innerHTML = `
+    <div class="auth">
+      <div class="auth-hero">
+        <div class="auth-logo">HAWKS <b>BOX</b><span class="tag">Força · Foco · Performance</span></div>
+        <div>
+          <h1 class="auth-headline">Do primeiro WOD<br>ao <span class="pink">topo do pódio</span>.</h1>
+          <p class="auth-sub">Gerencie seu campeonato com placar ao vivo, dois sistemas de pontuação e tudo salvo na nuvem — do jeito Hawks.</p>
+          <ul class="auth-feats">
+            <li><span class="tick">✓</span> Ranking recalculado em tempo real</li>
+            <li><span class="tick">✓</span> Pontos por colocação ou sistema invertido</li>
+            <li><span class="tick">✓</span> Acesso compartilhado entre a equipe da box</li>
+          </ul>
+        </div>
+        <div style="color:var(--steel);font-size:12px">© Hawks Box</div>
+      </div>
+      <div class="auth-form-wrap">
+        <div class="auth-card">
+          <h2>${isReg?'Criar conta':'Entrar'}</h2>
+          <p class="lead">${isReg?'Crie sua conta para gerenciar os campeonatos da box.':'Bem-vindo de volta. Acesse o painel da sua box.'}</p>
+          <div id="authMsg" class="auth-msg"></div>
+          ${isReg?`
+          <div class="auth-field"><label>Nome</label><div class="auth-input"><input id="f_name" type="text" placeholder="Seu nome" autocomplete="name"></div></div>` : ``}
+          <div class="auth-field"><label>E-mail</label><div class="auth-input"><input id="f_email" type="email" placeholder="voce@email.com" autocomplete="email"></div></div>
+          <div class="auth-field"><label>Senha</label><div class="auth-input"><input id="f_pass" type="password" placeholder="••••••••" autocomplete="${isReg?'new-password':'current-password'}"><button type="button" class="eye" onclick="togglePass()">👁</button></div></div>
+          ${isReg?`
+          <div class="auth-field"><label>Código de acesso da box</label><div class="auth-input"><input id="f_code" type="text" placeholder="código combinado com o sócio"></div></div>` : ``}
+          <button class="auth-btn" id="authSubmit" onclick="submitAuth()">${isReg?'Criar conta':'Entrar'}</button>
+          <div class="auth-alt">
+            ${isReg?'Já tem conta? ':'Ainda não tem cadastro? '}
+            <button class="auth-link" onclick="switchAuth('${isReg?'login':'register'}')">${isReg?'Fazer login':'Crie uma conta'}</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  const pass = el('#f_pass');
+  if(pass) pass.addEventListener('keydown', e=>{ if(e.key==='Enter') submitAuth(); });
+}
+window.switchAuth = m => { authMode=m; renderAuth(); };
+window.togglePass = () => { const p=el('#f_pass'); if(p) p.type = p.type==='password'?'text':'password'; };
+function authMsg(text, kind){ const m=el('#authMsg'); if(!m)return; m.textContent=text; m.className='auth-msg '+(kind||''); }
+
+window.submitAuth = async () => {
+  const btn=el('#authSubmit'); const isReg=authMode==='register';
+  const email=(el('#f_email')?.value||'').trim();
+  const password=el('#f_pass')?.value||'';
+  const name=(el('#f_name')?.value||'').trim();
+  const code=(el('#f_code')?.value||'').trim();
+  if(!email || !password){ authMsg('Preencha e-mail e senha.','err'); return; }
+  btn.disabled=true; btn.textContent='Aguarde…'; authMsg('','');
+  try{
+    const url = isReg?'/api/register':'/api/login';
+    const body = isReg?{name,email,password,code}:{email,password};
+    const res = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok){ authMsg(data.error||'Não foi possível continuar.','err'); btn.disabled=false; btn.textContent=isReg?'Criar conta':'Entrar'; return; }
+    setToken(data.token); AUTH.user=data.user;
+    await enterApp();
+  }catch(e){ authMsg('Erro de conexão. Tente de novo.','err'); btn.disabled=false; btn.textContent=isReg?'Criar conta':'Entrar'; }
+};
+
+function showAuth(){ el('#appscreen').style.display='none'; el('#authscreen').style.display='block'; renderAuth(); }
+async function enterApp(){
+  el('#authscreen').style.display='none';
+  el('#appscreen').style.display='block';
+  const u=AUTH.user||{}; const chip=el('#userchip'); if(chip) chip.innerHTML = u.name?('Olá, <b>'+esc(u.name.split(' ')[0])+'</b>'):'';
+  await load(); render();
+}
+function logout(){ setToken(null); AUTH.user=null; state={champs:[],activeId:null}; el('#userchip').innerHTML=''; showAuth(); }
+
 /* ============================ boot ============================ */
-(async function(){ await load(); render(); })();
+(async function(){
+  AUTH.token = getToken();
+  if(!AUTH.token){ showAuth(); return; }
+  try{
+    const res = await fetch('/api/me',{headers:{Authorization:'Bearer '+AUTH.token}});
+    if(res.ok){ const d=await res.json(); AUTH.user=d.user; await enterApp(); }
+    else showAuth();
+  }catch(e){ showAuth(); }
+})();
 </script>
