@@ -220,8 +220,12 @@
   .auth-feats li{display:flex;gap:10px;align-items:center;color:var(--chalk);font-size:14px;font-weight:500}
   .auth-feats .tick{color:var(--arc);font-weight:700}
 
-  .auth-form-wrap{display:flex;align-items:center;justify-content:center;padding:36px 28px;background:var(--pit)}
+  .auth-form-wrap{display:flex;align-items:center;justify-content:center;padding:36px 28px;background:var(--pit);overflow-y:auto;max-height:100vh}
   .auth-card{width:100%;max-width:390px}
+  .doc-row{display:flex;gap:8px}
+  .doc-type{background:var(--raised);border:1px solid var(--line);color:var(--chalk);border-radius:11px;padding:0 10px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer}
+  .auth-row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:420px){.auth-row2{grid-template-columns:1fr}}
   .auth-card h2{font-family:'Anton';font-weight:400;font-size:26px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
   .auth-card .lead{color:var(--steel);font-size:14px;margin-bottom:24px}
   .auth-field{margin-bottom:16px}
@@ -371,7 +375,11 @@ function esc(s){ return (s+'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>'
 
 function renderTopbar(){
   const sel = el('#champPick');
-  sel.innerHTML = state.champs.map(c=>`<option value="${c.id}" ${c.id===state.activeId?'selected':''}>${esc(c.name)}</option>`).join('');
+  const admin = AUTH.user && AUTH.user.role==='admin';
+  sel.innerHTML = state.champs.map(c=>{
+    const label = (admin && c._boxName) ? esc(c.name)+' · '+esc(c._boxName) : esc(c.name);
+    return `<option value="${c.id}" ${c.id===state.activeId?'selected':''}>${label}</option>`;
+  }).join('');
   sel.style.display = state.champs.length ? '' : 'none';
 }
 
@@ -612,61 +620,91 @@ function renderAuth(){
           <ul class="auth-feats">
             <li><span class="tick">✓</span> Ranking recalculado em tempo real</li>
             <li><span class="tick">✓</span> Pontos por colocação ou sistema invertido</li>
-            <li><span class="tick">✓</span> Acesso compartilhado entre a equipe da box</li>
+            <li><span class="tick">✓</span> Cada box enxerga só os seus campeonatos</li>
           </ul>
         </div>
         <div style="color:var(--steel);font-size:12px">© Hawks Box</div>
       </div>
       <div class="auth-form-wrap">
         <div class="auth-card">
-          <h2>${isReg?'Criar conta':'Entrar'}</h2>
-          <p class="lead">${isReg?'Crie sua conta para gerenciar os campeonatos da box.':'Bem-vindo de volta. Acesse o painel da sua box.'}</p>
+          <h2>${isReg?'Cadastre-se':'Entrar'}</h2>
+          <p class="lead">${isReg?'Crie a conta da sua box para gerenciar os campeonatos.':'Bem-vindo de volta. Acesse o painel da sua box.'}</p>
           <div id="authMsg" class="auth-msg"></div>
-          ${isReg?`
-          <div class="auth-field"><label>Nome</label><div class="auth-input"><input id="f_name" type="text" placeholder="Seu nome" autocomplete="name"></div></div>` : ``}
-          <div class="auth-field"><label>E-mail</label><div class="auth-input"><input id="f_email" type="email" placeholder="voce@email.com" autocomplete="email"></div></div>
-          <div class="auth-field"><label>Senha</label><div class="auth-input"><input id="f_pass" type="password" placeholder="••••••••" autocomplete="${isReg?'new-password':'current-password'}"><button type="button" class="eye" onclick="togglePass()">👁</button></div></div>
-          ${isReg?`
-          <div class="auth-field"><label>Código de acesso da box</label><div class="auth-input"><input id="f_code" type="text" placeholder="código combinado com o sócio"></div></div>` : ``}
-          <button class="auth-btn" id="authSubmit" onclick="submitAuth()">${isReg?'Criar conta':'Entrar'}</button>
+          ${isReg ? `
+            <div class="auth-field"><label>E-mail</label><div class="auth-input"><input id="f_email" type="email" placeholder="voce@email.com" autocomplete="email"></div></div>
+            <div class="auth-field"><label>Confirme seu e-mail</label><div class="auth-input"><input id="f_email2" type="email" placeholder="repita o e-mail"></div></div>
+            <div class="auth-field"><label>Nome da empresa / box</label><div class="auth-input"><input id="f_company" type="text" placeholder="Ex.: Hawks Box"></div></div>
+            <div class="auth-field"><label>Telefone (WhatsApp)</label><div class="auth-input"><input id="f_phone" type="text" placeholder="(00) 00000-0000"></div></div>
+            <div class="auth-field"><label>Documento</label>
+              <div class="doc-row">
+                <select id="f_doctype" class="doc-type"><option>CNPJ</option><option>CPF</option></select>
+                <div class="auth-input" style="flex:1"><input id="f_document" type="text" placeholder="Somente números"></div>
+              </div>
+            </div>
+            <div class="auth-field"><label>Nome de usuário</label><div class="auth-input"><input id="f_username" type="text" placeholder="Como você aparece no sistema"></div></div>
+            <div class="auth-row2">
+              <div class="auth-field"><label>Senha</label><div class="auth-input"><input id="f_pass" type="password" placeholder="••••••" autocomplete="new-password"><button type="button" class="eye" onclick="togglePass('f_pass')">👁</button></div></div>
+              <div class="auth-field"><label>Confirme a senha</label><div class="auth-input"><input id="f_pass2" type="password" placeholder="••••••"><button type="button" class="eye" onclick="togglePass('f_pass2')">👁</button></div></div>
+            </div>
+            <button class="auth-btn" id="authSubmit" onclick="submitAuth()">Cadastrar agora</button>
+          ` : `
+            <div class="auth-field"><label>E-mail</label><div class="auth-input"><input id="f_email" type="email" placeholder="voce@email.com" autocomplete="email"></div></div>
+            <div class="auth-field"><label>Senha</label><div class="auth-input"><input id="f_pass" type="password" placeholder="••••••••" autocomplete="current-password"><button type="button" class="eye" onclick="togglePass('f_pass')">👁</button></div></div>
+            <button class="auth-btn" id="authSubmit" onclick="submitAuth()">Entrar</button>
+          `}
           <div class="auth-alt">
-            ${isReg?'Já tem conta? ':'Ainda não tem cadastro? '}
-            <button class="auth-link" onclick="switchAuth('${isReg?'login':'register'}')">${isReg?'Fazer login':'Crie uma conta'}</button>
+            ${isReg?'Já tem cadastro? ':'Ainda não tem cadastro? '}
+            <button class="auth-link" onclick="switchAuth('${isReg?'login':'register'}')">${isReg?'Fazer Login':'Crie uma conta'}</button>
           </div>
         </div>
       </div>
     </div>`;
-  const pass = el('#f_pass');
-  if(pass) pass.addEventListener('keydown', e=>{ if(e.key==='Enter') submitAuth(); });
+  const last = el(isReg?'#f_pass2':'#f_pass');
+  if(last) last.addEventListener('keydown', e=>{ if(e.key==='Enter') submitAuth(); });
 }
 window.switchAuth = m => { authMode=m; renderAuth(); };
-window.togglePass = () => { const p=el('#f_pass'); if(p) p.type = p.type==='password'?'text':'password'; };
-function authMsg(text, kind){ const m=el('#authMsg'); if(!m)return; m.textContent=text; m.className='auth-msg '+(kind||''); }
+window.togglePass = (id) => { const p=el('#'+id); if(p) p.type = p.type==='password'?'text':'password'; };
+function authMsg(text, kind){ const m=el('#authMsg'); if(!m)return; m.textContent=text; m.className='auth-msg '+(kind||''); if(kind==='err'){ const w=el('.auth-form-wrap'); if(w) w.scrollTop=0; } }
 
 window.submitAuth = async () => {
   const btn=el('#authSubmit'); const isReg=authMode==='register';
-  const email=(el('#f_email')?.value||'').trim();
-  const password=el('#f_pass')?.value||'';
-  const name=(el('#f_name')?.value||'').trim();
-  const code=(el('#f_code')?.value||'').trim();
-  if(!email || !password){ authMsg('Preencha e-mail e senha.','err'); return; }
+  const val=id=>(el('#'+id)?.value||'').trim();
+  const email=val('f_email'); const password=el('#f_pass')?.value||'';
+  if(isReg){
+    const email2=val('f_email2'), company=val('f_company'), phone=val('f_phone'),
+          document=val('f_document'), documentType=val('f_doctype'), username=val('f_username'),
+          password2=el('#f_pass2')?.value||'';
+    if(!email||!email2){ authMsg('Preencha e confirme o e-mail.','err'); return; }
+    if(email!==email2){ authMsg('Os e-mails não conferem.','err'); return; }
+    if(!company){ authMsg('Informe o nome da empresa/box.','err'); return; }
+    if(!username){ authMsg('Informe o nome de usuário.','err'); return; }
+    if(password.length<6){ authMsg('A senha precisa ter ao menos 6 caracteres.','err'); return; }
+    if(password!==password2){ authMsg('As senhas não conferem.','err'); return; }
+    await sendAuth(btn,'/api/register',{email,email2,companyName:company,phone,document,documentType,username,password,password2},'Cadastrar agora');
+  } else {
+    if(!email||!password){ authMsg('Preencha e-mail e senha.','err'); return; }
+    await sendAuth(btn,'/api/login',{email,password},'Entrar');
+  }
+};
+async function sendAuth(btn,url,body,label){
   btn.disabled=true; btn.textContent='Aguarde…'; authMsg('','');
   try{
-    const url = isReg?'/api/register':'/api/login';
-    const body = isReg?{name,email,password,code}:{email,password};
-    const res = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    const data = await res.json().catch(()=>({}));
-    if(!res.ok){ authMsg(data.error||'Não foi possível continuar.','err'); btn.disabled=false; btn.textContent=isReg?'Criar conta':'Entrar'; return; }
-    setToken(data.token); AUTH.user=data.user;
-    await enterApp();
-  }catch(e){ authMsg('Erro de conexão. Tente de novo.','err'); btn.disabled=false; btn.textContent=isReg?'Criar conta':'Entrar'; }
-};
+    const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok){ authMsg(data.error||'Não foi possível continuar.','err'); btn.disabled=false; btn.textContent=label; return; }
+    setToken(data.token); AUTH.user=data.user; await enterApp();
+  }catch(e){ authMsg('Erro de conexão. Tente de novo.','err'); btn.disabled=false; btn.textContent=label; }
+}
 
 function showAuth(){ el('#appscreen').style.display='none'; el('#authscreen').style.display='block'; renderAuth(); }
 async function enterApp(){
   el('#authscreen').style.display='none';
   el('#appscreen').style.display='block';
-  const u=AUTH.user||{}; const chip=el('#userchip'); if(chip) chip.innerHTML = u.name?('Olá, <b>'+esc(u.name.split(' ')[0])+'</b>'):'';
+  const u=AUTH.user||{}; const chip=el('#userchip');
+  if(chip){
+    if(u.role==='admin') chip.innerHTML='<b>Admin</b> · todas as boxes';
+    else chip.innerHTML = (u.name?('Olá, <b>'+esc(u.name.split(' ')[0])+'</b>'):'') + (u.boxName?(' · '+esc(u.boxName)):'');
+  }
   await load(); render();
 }
 function logout(){ setToken(null); AUTH.user=null; state={champs:[],activeId:null}; el('#userchip').innerHTML=''; showAuth(); }
