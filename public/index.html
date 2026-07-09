@@ -302,6 +302,14 @@
   .pub-opt.on{border-color:var(--arc);background:var(--arc-soft)}
   .pub-opt.on .pick-radio{border-color:var(--arc)}
   .pub-opt.on .pick-radio::after{content:'';position:absolute;inset:3px;border-radius:50%;background:var(--arc)}
+  .wiz-foot{display:flex;justify-content:space-between;gap:12px;margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+  .faixa-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--steel);margin-bottom:10px}
+  .faixa-row input{width:70px;background:var(--raised);border:1px solid var(--line);color:var(--chalk);border-radius:8px;padding:8px 10px;font-family:'JetBrains Mono';text-align:center;font-weight:700}
+  .pts-preview{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .pp{background:var(--raised);border:1px solid var(--line);border-radius:9px;padding:8px 12px;text-align:center;min-width:56px}
+  .pp-pos{display:block;font-size:11px;color:var(--arc-hi);font-weight:700}
+  .pp-val{display:block;font-family:'JetBrains Mono';font-weight:700;font-size:18px}
+  .pp-u{display:block;font-size:9px;color:var(--steel);text-transform:uppercase;letter-spacing:1px}
   .badge{display:inline-block;font-size:12px;font-weight:700;padding:4px 11px;border-radius:20px}
   .st-draft{background:rgba(141,149,192,.16);color:var(--steel)}
   .st-live{background:var(--arc-soft);color:var(--arc-hi)}
@@ -455,6 +463,7 @@ function newChamp(name, opts){
     dateStart:opts.dateStart||'', dateEnd:opts.dateEnd||'', status:opts.status||'rascunho',
     categories:[], loc:{cep:'',cidade:'',estado:'',logradouro:'',numero:'',complemento:'',bairro:''},
     ptsScheme:'auto', ptsTable:[100,94,88,82,76,70,64,60,56,52,48,44,40,36,32,28,24,20,16,12],
+    ptsMax:100, faixas:[{do:1,ao:10,diff:5}], tiebreakCrit:'melhor',
     participants:[], events:[], results:{} };
   state.champs.push(c); state.activeId=c.id; return c;
 }
@@ -463,6 +472,17 @@ function fmtDate(iso){ if(!iso) return ''; const p=iso.split('-'); return p.leng
 function dateRange(c){ const a=fmtDate(c.dateStart), b=fmtDate(c.dateEnd); if(a&&b) return a+' – '+b; return a||b||'—'; }
 
 /* ============================ cálculo do ranking ============================ */
+function faixaTable(c){
+  const max = Number(c.ptsMax)||100;
+  const faixas = (c.faixas&&c.faixas.length)?c.faixas:[{do:1,ao:10,diff:5}];
+  const lastPlace = Math.max(1, ...faixas.map(f=>Number(f.ao)||0));
+  const t={1:max};
+  for(let p=2;p<=lastPlace;p++){
+    const f = faixas.find(f=>p>=(Number(f.do)||1)&&p<=(Number(f.ao)||0)) || faixas[faixas.length-1];
+    t[p] = Math.max(0, (t[p-1]!=null?t[p-1]:max) - (Number(f.diff)||0));
+  }
+  return t;
+}
 function eventPoints(champ, placement){
   // placement: inteiro >=1, ou null (sem resultado / DNF)
   const n = champ.participants.length;
@@ -472,12 +492,14 @@ function eventPoints(champ, placement){
   // modo pontos (mais vence)
   if(placement==null) return 0;
   if(champ.ptsScheme==='auto') return Math.max(0, n - placement + 1);
+  if(champ.ptsScheme==='faixas'){ const t=faixaTable(champ); return t[placement]!=null?t[placement]:1; }
   const t = champ.ptsTable;
   return t[placement-1] != null ? t[placement-1] : 1;   // tabela personalizada
 }
 function standings(champ){
+  const tbWod = (champ.tiebreakCrit||'').startsWith('wod:') ? champ.tiebreakCrit.slice(4) : null;
   const rows = champ.participants.map(p=>{
-    let total=0, wins=0, best=Infinity;
+    let total=0, wins=0, best=Infinity, tbPlace=Infinity;
     const detail = champ.events.map(ev=>{
       const pl = (champ.results[ev.id]||{})[p.id];
       const placement = (pl===''||pl==null||isNaN(pl)) ? null : Math.round(pl);
@@ -485,13 +507,15 @@ function standings(champ){
       total += pts;
       if(placement===1) wins++;
       if(placement!=null && placement<best) best=placement;
+      if(tbWod && ev.id===tbWod && placement!=null) tbPlace=placement;
       return { ev, placement, pts };
     });
-    return { p, total, wins, best, detail };
+    return { p, total, wins, best, tbPlace, detail };
   });
   rows.sort((a,b)=>{
     if(champ.mode==='golf'){ if(a.total!==b.total) return a.total-b.total; }
     else { if(a.total!==b.total) return b.total-a.total; }
+    if(tbWod && a.tbPlace!==b.tbPlace) return a.tbPlace-b.tbPlace;   // desempate por WOD escolhido
     if(a.wins!==b.wins) return b.wins-a.wins;            // mais vitórias desempata
     if(a.best!==b.best) return a.best-b.best;            // melhor colocação individual
     return a.p.name.localeCompare(b.p.name);
@@ -596,8 +620,19 @@ function renderStep(){
   const c = active(); const body = el('#tabbody'); if(!body) return;
   ({info:tabInfo, categorias:tabCategorias, atletas:tabAtletas, provas:tabProvas, pontuacao:tabPontuacao,
     inscricao:tabInscricao, gateway:tabGateway, personalizacao:tabPersonalizacao, venda:tabVenda, cupons:tabCupons}[ui.step]||tabInfo)(c, body);
+  const i = NAV_ORDER.indexOf(ui.step);
+  if(i>=0){
+    const last = i===NAV_ORDER.length-1;
+    body.insertAdjacentHTML('beforeend', `<div class="wiz-foot">
+      <button class="btn ghost" onclick="wizPrev()" ${i===0?'disabled':''}>← Anterior</button>
+      <button class="btn primary" onclick="wizNext()">${last?'Ir para o Painel ▸':'Salvar e Continuar →'}</button>
+    </div>`);
+  }
   updateWizChecks();
 }
+const NAV_ORDER = ['info','categorias','atletas','inscricao','provas','pontuacao'];
+window.wizNext = ()=>{ const i=NAV_ORDER.indexOf(ui.step); if(i>=0 && i<NAV_ORDER.length-1){ ui.step=NAV_ORDER[i+1]; renderStep(); } else if(active()){ openControl(active().id); } };
+window.wizPrev = ()=>{ const i=NAV_ORDER.indexOf(ui.step); if(i>0){ ui.step=NAV_ORDER[i-1]; renderStep(); } };
 
 function renderDashboard(app){
   const admin = AUTH.user && AUTH.user.role==='admin';
@@ -819,10 +854,10 @@ window.openWod = (id)=>{
     <div class="modal-back" onclick="closeModal(event)">
       <div class="modal-card" onclick="event.stopPropagation()" style="max-width:600px">
         <h3>${e?'Editar WOD':'Criar WOD'}</h3>
+        <div style="margin-bottom:14px"><label class="fld">Título do WOD</label><input type="text" id="wod_name" value="${e?esc(e.name):''}" placeholder="Ex.: Agacha que passa Pt1"></div>
         <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:16px">
-          <div style="flex:2;min-width:200px"><label class="fld">Título do WOD</label><input type="text" id="wod_name" value="${e?esc(e.name):''}" placeholder="Ex.: Agacha que passa Pt1"></div>
-          <div style="flex:1;min-width:140px"><label class="fld">Tipo de resultado</label><select id="wod_type" class="champ-pick" style="width:100%">${opts}</select></div>
-          <div style="width:150px"><label class="fld">Data</label><input type="date" id="wod_date" value="${e?(e.date||''):''}"></div>
+          <div style="flex:1;min-width:160px"><label class="fld">Tipo de resultado</label><select id="wod_type" class="champ-pick" style="width:100%">${opts}</select></div>
+          <div style="flex:1;min-width:160px"><label class="fld">Data</label><input type="date" id="wod_date" value="${e?(e.date||''):''}"></div>
         </div>
         <div class="mod-sec">
           <div class="sub-blue">Tiebreak</div>
@@ -877,7 +912,7 @@ window.openCatDetail = (wodId, catId)=>{
         </div>`:''}
         <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:14px">
           <div style="flex:1;min-width:160px"><label class="fld">Tipo de resultado</label><select id="cd_type" class="champ-pick" style="width:100%">${opts}</select></div>
-          <div style="width:150px"><label class="fld">Time Cap</label><input type="text" id="cd_cap" value="${esc(d.timeCap||'')}" placeholder="mm:ss (ex.: 09:00)"></div>
+          <div style="width:150px"><label class="fld">Time Cap</label><input type="text" id="cd_cap" value="${esc(d.timeCap||'')}" placeholder="mm:ss (ex.: 13:00)" onblur="fmtCap(this)"></div>
         </div>
         <label class="fld">Detalhamento do WOD</label>
         <textarea id="cd_desc" class="wod-textarea" placeholder="Ex.: 4 Rounds For time&#10;400m run&#10;Max de Air Squat&#10;1 corre, enquanto 1 agacha.">${esc(d.desc||'')}</textarea>
@@ -890,6 +925,7 @@ window.openCatDetail = (wodId, catId)=>{
   setTimeout(()=>el('#cd_desc')?.focus(),50);
 };
 window.toggleCatAtiva = (btn)=>{ catDraft.ativa=!catDraft.ativa; btn.classList.toggle('on',catDraft.ativa); };
+window.fmtCap = (inp)=>{ let v=(inp.value||'').trim(); if(!v) return; if(/^\d{1,3}$/.test(v)) inp.value=v+':00'; else if(/^\d{1,3}:\d$/.test(v)) inp.value=v+'0'; else if(/^\d{1,3}:$/.test(v)) inp.value=v+'00'; };
 window.saveCatDetail = (wodId, catId)=>{
   const c=active(); const e=c.events.find(x=>x.id===wodId); if(!e) return;
   if(!e.catDetails) e.catDetails={};
@@ -1024,7 +1060,17 @@ function tabVenda(c, body){ body.innerHTML = emBreve('Venda de Inscrições','�
 function tabCupons(c, body){ body.innerHTML = emBreve('Cupons','🏷️','Crie cupons de desconto para promoções e parcerias na venda de inscrições.'); }
 /* ---- PONTUAÇÃO ---- */
 function tabPontuacao(c, body){
+  const wodOpts = (c.events||[]).map(e=>`<option value="wod:${e.id}" ${c.tiebreakCrit==='wod:'+e.id?'selected':''}>${esc(e.name)}</option>`).join('');
   body.innerHTML = `
+    <div class="card">
+      <h2>Critério de desempate</h2>
+      <div class="hint" style="margin-bottom:10px">Qual será o critério de desempate da leaderboard?</div>
+      <select class="champ-pick" style="width:100%;max-width:420px" onchange="setTiebreakCrit(this.value)">
+        <option value="melhor" ${c.tiebreakCrit==='melhor'?'selected':''}>Atleta mais bem colocado</option>
+        <option value="confronto" ${c.tiebreakCrit==='confronto'?'selected':''}>Confronto direto</option>
+        ${wodOpts?`<optgroup label="Por WOD">${wodOpts}</optgroup>`:''}
+      </select>
+    </div>
     <div class="modebox">
       <label class="fld">Modelo de pontuação — qual equipe fica em 1º?</label>
       <div class="seg">
@@ -1036,25 +1082,49 @@ function tabPontuacao(c, body){
           ? `<span class="arrow">+</span><span>Cada colocação vale uma quantidade de pontos (1º lugar = mais pontos). Somam-se todas as provas e <b>vence quem tiver mais pontos</b>.</span>`
           : `<span class="arrow">−</span><span>A colocação vira a própria pontuação (1º lugar = 1 ponto, 2º = 2...). Somam-se todas as provas e <b>vence quem tiver menos pontos</b>.</span>`}
       </div>
-      <div class="mode-explain"><span class="arrow">≡</span><span><b>Critério de desempate:</b> atleta mais bem colocado (maior nº de vitórias de prova, depois a melhor colocação individual).</span></div>
     </div>
     ${c.mode==='points' ? ptsConfig(c) : ''}`;
 }
 function ptsConfig(c){
+  const faixas = (c.faixas&&c.faixas.length)?c.faixas:[{do:1,ao:10,diff:5}];
+  const t = faixaTable(c); const places = Object.keys(t).map(Number).sort((a,b)=>a-b);
   return `<div class="card">
-    <h2>Tabela de pontos</h2>
-    <div class="seg" style="max-width:520px;margin-bottom:14px">
-      <button class="${c.ptsScheme==='auto'?'on':''}" onclick="setScheme('auto')">Automático (pelo nº de atletas)</button>
+    <h2>Modelo de pontuação</h2>
+    <div class="seg" style="max-width:640px;margin-bottom:16px">
+      <button class="${c.ptsScheme==='auto'?'on':''}" onclick="setScheme('auto')">Automático (nº de atletas)</button>
+      <button class="${c.ptsScheme==='faixas'?'on':''}" onclick="setScheme('faixas')">Por faixas (fórmula)</button>
       <button class="${c.ptsScheme==='table'?'on':''}" onclick="setScheme('table')">Tabela personalizada</button>
     </div>
     ${c.ptsScheme==='auto'
       ? `<div class="hint">1º lugar vale o total de competidores; cada posição abaixo vale 1 ponto a menos (último vale 1). Escala sozinho conforme você adiciona atletas — bom para campeonatos internos de box.</div>`
+    : c.ptsScheme==='faixas'
+      ? `<div class="hint" style="margin-bottom:12px">Construa a pontuação como uma fórmula. Ex.: do 1º ao 10º lugar, a diferença é de 5 pontos.</div>
+         <div class="row" style="align-items:center;gap:10px;margin-bottom:14px">
+           <span class="fld" style="margin:0">Pontuação máxima (1º lugar)</span>
+           <input type="number" min="1" value="${Number(c.ptsMax)||100}" style="width:100px" oninput="setPtsMax(this.value)">
+         </div>
+         <div id="faixasList">${faixas.map((f,i)=>`
+           <div class="faixa-row">
+             <span>Do</span><input type="number" min="1" value="${f.do}" oninput="setFaixa(${i},'do',this.value)">
+             <span>ao</span><input type="number" min="1" value="${f.ao}" oninput="setFaixa(${i},'ao',this.value)">
+             <span>lugar, a diferença é de</span><input type="number" min="0" value="${f.diff}" oninput="setFaixa(${i},'diff',this.value)"><span>pontos</span>
+             ${faixas.length>1?`<button class="rowdel" onclick="delFaixa(${i})" title="Remover faixa">🗑</button>`:''}
+           </div>`).join('')}</div>
+         <button class="btn" style="width:100%;margin:6px 0 16px" onclick="addFaixa()">+ Adicionar faixa de pontuação</button>
+         <div class="fld">Visualização da pontuação</div>
+         <div class="pts-preview">${places.map(p=>`<div class="pp"><span class="pp-pos">${p}º</span><span class="pp-val">${t[p]}</span><span class="pp-u">pts</span></div>`).join('')}</div>`
       : `<div class="hint" style="margin-bottom:12px">Defina quantos pontos vale cada colocação. Colocações além da tabela valem 1 ponto. Estilo CrossFit Games (100, 94, 88...).</div>
          <div class="row wrap" id="ptsGrid">${c.ptsTable.map((v,i)=>`
            <div style="width:78px"><label class="fld" style="text-align:center">${i+1}º</label>
            <input type="number" min="0" value="${v}" oninput="setPts(${i}, this.value)"></div>`).join('')}</div>`}
   </div>`;
 }
+window.setTiebreakCrit = v=>{ active().tiebreakCrit=v; save(); };
+window.setPtsMax = v=>{ const c=active(); c.ptsMax=Math.max(1,Math.round(Number(v)||100)); c.pontConfigured=true; save(); updatePreview(); };
+window.setFaixa = (i,k,v)=>{ const c=active(); const f=(c.faixas||[])[i]; if(!f)return; f[k]=Math.max(0,Math.round(Number(v)||0)); c.pontConfigured=true; save(); updatePreview(); };
+window.addFaixa = ()=>{ const c=active(); const last=(c.faixas||[]).slice(-1)[0]; const start=last?(Number(last.ao)||0)+1:1; (c.faixas||(c.faixas=[])).push({do:start,ao:start+9,diff:3}); c.pontConfigured=true; save(); renderStep(); };
+window.delFaixa = i=>{ const c=active(); c.faixas.splice(i,1); if(!c.faixas.length)c.faixas=[{do:1,ao:10,diff:5}]; save(); renderStep(); };
+function updatePreview(){ const el2=el('.pts-preview'); if(!el2)return; const c=active(); const t=faixaTable(c); const places=Object.keys(t).map(Number).sort((a,b)=>a-b); el2.innerHTML=places.map(p=>`<div class="pp"><span class="pp-pos">${p}º</span><span class="pp-val">${t[p]}</span><span class="pp-u">pts</span></div>`).join(''); updateWizChecks(); }
 
 function emptyMsg(big,txt,step,btn){
   return `<div class="empty"><div class="big">${big}</div><p>${txt}</p><button class="btn primary" onclick="goEdit('${step}')">${btn}</button></div>`;
