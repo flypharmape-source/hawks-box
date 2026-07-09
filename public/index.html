@@ -280,6 +280,12 @@
   .wod-exp{background:none;border:1px solid var(--line);color:var(--chalk);border-radius:7px;cursor:pointer;padding:5px 9px;font-size:12px;flex:0 0 auto}
   .wod-desc{padding:0 14px 14px 47px;color:var(--chalk);font-size:14px;line-height:1.55;white-space:pre-wrap}
   .wod-textarea{width:100%;min-height:120px;background:var(--raised);border:1px solid var(--line);color:var(--chalk);border-radius:11px;padding:12px 14px;font-family:inherit;font-size:14px;line-height:1.5;resize:vertical}
+  .wodcat{display:flex;align-items:center;gap:12px;justify-content:space-between;background:var(--raised);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:8px}
+  .wodcat-info{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .tgl{width:44px;height:24px;border-radius:20px;background:var(--line);position:relative;cursor:pointer;border:none;flex:0 0 auto;transition:.15s}
+  .tgl span{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.15s}
+  .tgl.on{background:var(--arc)}
+  .tgl.on span{left:23px}
   .badge{display:inline-block;font-size:12px;font-weight:700;padding:4px 11px;border-radius:20px}
   .st-draft{background:rgba(141,149,192,.16);color:var(--steel)}
   .st-live{background:var(--arc-soft);color:var(--arc-hi)}
@@ -768,20 +774,37 @@ function tabProvas(c, body){
 }
 window.toggleWod = id => { ui.wodOpen = ui.wodOpen===id?null:id; renderStep(); };
 window.moveWod = (id,dir)=>{ const c=active(); const i=c.events.findIndex(e=>e.id===id); const j=i+dir; if(j<0||j>=c.events.length)return; const t=c.events[i]; c.events[i]=c.events[j]; c.events[j]=t; save(); renderStep(); };
+let wodDraft = null;
 window.openWod = (id)=>{
   const c=active(); const e = id ? c.events.find(x=>x.id===id) : null;
+  wodDraft = { cats: Object.assign({}, e?(e.cats||{}):{}) };
   const opts = Object.entries(RESULT_TYPES).map(([k,v])=>`<option value="${k}" ${e&&e.resultType===k?'selected':''}>${v}</option>`).join('');
+  const cats = c.categories||[];
+  const catsBlock = cats.length ? `
+      <label class="fld" style="margin-top:16px">Categorias contempladas</label>
+      <div class="hint" style="margin-bottom:8px">Desative caso não queira que a categoria participe deste WOD.</div>
+      <div>${cats.map(ct=>{
+        const on = (wodDraft.cats[ct.id]!==false);
+        return `<div class="wodcat">
+          <div class="wodcat-info"><b>${esc(ct.name)}</b> <span class="cat-tag">${esc(ct.type)}</span> <span class="cat-size">👥 ${ct.size}</span></div>
+          <button type="button" class="tgl ${on?'on':''}" onclick="toggleWodCat('${ct.id}',this)"><span></span></button>
+        </div>`;
+      }).join('')}</div>` : `<div class="hint" style="margin-top:14px">Cadastre categorias na etapa <b>Categorias</b> para ativar/desativar por categoria.</div>`;
   let m = el('#modal'); if(!m){ m=document.createElement('div'); m.id='modal'; document.body.appendChild(m); }
   m.innerHTML = `
     <div class="modal-back" onclick="closeModal(event)">
-      <div class="modal-card" onclick="event.stopPropagation()" style="max-width:560px">
+      <div class="modal-card" onclick="event.stopPropagation()" style="max-width:600px">
         <h3>${e?'Editar WOD':'Criar WOD'}</h3>
         <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:14px">
           <div style="flex:2;min-width:200px"><label class="fld">Título do WOD</label><input type="text" id="wod_name" value="${e?esc(e.name):''}" placeholder="Ex.: Agacha que passa Pt1"></div>
-          <div style="flex:1;min-width:150px"><label class="fld">Tipo de resultado</label><select id="wod_type" class="champ-pick" style="width:100%">${opts}</select></div>
+          <div style="flex:1;min-width:140px"><label class="fld">Tipo de resultado</label><select id="wod_type" class="champ-pick" style="width:100%">${opts}</select></div>
         </div>
-        <div style="margin-bottom:14px"><label class="fld">Data</label><input type="date" id="wod_date" value="${e?(e.date||''):''}" style="max-width:200px"></div>
-        <label class="fld">Descrição da prova</label>
+        <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:14px">
+          <div style="width:150px"><label class="fld">Time Cap</label><input type="text" id="wod_cap" value="${e?esc(e.timeCap||''):''}" placeholder="mm:ss (ex.: 09:00)"></div>
+          <div style="flex:1;min-width:150px"><label class="fld">Data</label><input type="date" id="wod_date" value="${e?(e.date||''):''}"></div>
+        </div>
+        ${catsBlock}
+        <label class="fld" style="margin-top:16px">Descrição da prova</label>
         <textarea id="wod_desc" class="wod-textarea" placeholder="Ex.: 4 Rounds For time&#10;400m run&#10;Max de Air Squat&#10;1 corre, enquanto 1 agacha.">${e?esc(e.desc||''):''}</textarea>
         <div class="row" style="gap:10px;justify-content:flex-end;margin-top:18px">
           <button class="btn ghost" onclick="closeModal()">Cancelar</button>
@@ -791,12 +814,13 @@ window.openWod = (id)=>{
     </div>`;
   setTimeout(()=>el('#wod_name')?.focus(),50);
 };
+window.toggleWodCat = (catId, btn)=>{ const on = (wodDraft.cats[catId]!==false); wodDraft.cats[catId] = !on; btn.classList.toggle('on', !on); };
 window.saveWod = (id)=>{
   const c=active(); const name=(el('#wod_name')?.value||'').trim(); if(!name){ el('#wod_name')?.focus(); return; }
-  const data={ name, resultType:el('#wod_type')?.value||'tempo', date:el('#wod_date')?.value||'', desc:(el('#wod_desc')?.value||'').trim() };
+  const data={ name, resultType:el('#wod_type')?.value||'tempo', timeCap:(el('#wod_cap')?.value||'').trim(), date:el('#wod_date')?.value||'', desc:(el('#wod_desc')?.value||'').trim(), cats:(wodDraft?wodDraft.cats:{}) };
   if(id){ const e=c.events.find(x=>x.id===id); if(e) Object.assign(e,data); }
   else { c.events.push(Object.assign({id:uid()},data)); }
-  save(); closeModal(); renderStep();
+  wodDraft=null; save(); closeModal(); renderStep();
 };
 /* ---- INFORMAÇÕES BÁSICAS ---- */
 function tabInfo(c, body){
