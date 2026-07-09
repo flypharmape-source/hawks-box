@@ -464,7 +464,7 @@ function render(){
       <div class="wizard">
         <div class="wiz-nav">
           <div class="wiz-group">Configuração</div>
-          ${steps.map(([id,label])=>`<button class="wiz-step ${ui.step===id?'on':''}" onclick="setStep('${id}')"><span class="wiz-check ${stepDone(c,id)?'done':''}">${stepDone(c,id)?'✓':''}</span>${label}</button>`).join('')}
+          ${steps.map(([id,label])=>`<button class="wiz-step ${ui.step===id?'on':''}" data-step="${id}" onclick="setStep('${id}')"><span class="wiz-check ${stepDone(c,id)?'done':''}">${stepDone(c,id)?'✓':''}</span>${label}</button>`).join('')}
           <button class="btn primary" style="margin-top:16px;width:100%" onclick="openControl('${c.id}')">Ir para o Painel ▸</button>
         </div>
         <div class="wiz-body" id="tabbody"></div>
@@ -492,14 +492,24 @@ function stepDone(c,id){
   if(id==='categorias') return (c.categories||[]).length>0;
   if(id==='atletas') return c.participants.length>0;
   if(id==='provas') return c.events.length>0;
-  if(id==='pontuacao') return true;
+  if(id==='pontuacao') return !!c.pontConfigured;
   return false;
+}
+function updateWizChecks(){
+  const c = active(); if(!c) return;
+  document.querySelectorAll('.wiz-step[data-step]').forEach(btn=>{
+    const chk = btn.querySelector('.wiz-check'); if(!chk) return;
+    if(stepDone(c, btn.getAttribute('data-step'))){ chk.classList.add('done'); chk.textContent='✓'; }
+    else { chk.classList.remove('done'); chk.textContent=''; }
+  });
 }
 window.setStep = id => { ui.step=id; renderStep(); };
 function renderStep(){
   document.querySelectorAll('.wiz-step').forEach(t=>t.classList.remove('on'));
+  const active_btn = document.querySelector('.wiz-step[data-step="'+ui.step+'"]'); if(active_btn) active_btn.classList.add('on');
   const c = active(); const body = el('#tabbody'); if(!body) return;
   ({info:tabInfo, categorias:tabCategorias, atletas:tabAtletas, provas:tabProvas, pontuacao:tabPontuacao}[ui.step]||tabInfo)(c, body);
+  updateWizChecks();
 }
 
 function renderDashboard(app){
@@ -810,15 +820,16 @@ window.createChamp = ()=>{
   setActive(c.id); putChamp(c); closeModal(); ui.view='manage'; ui.tab='placar'; render();
 };
 
-window.act_addP = ()=>{ const i=el('#newP'); const v=i.value.trim(); if(!v)return; active().participants.push({id:uid(),name:v}); save(); renderTab(); el('#newP').focus(); };
-window.act_delP = id=>{ const c=active(); c.participants=c.participants.filter(p=>p.id!==id); Object.values(c.results).forEach(r=>delete r[id]); save(); renderTab(); };
-window.act_addE = ()=>{ const i=el('#newE'); const v=i.value.trim(); if(!v)return; active().events.push({id:uid(),name:v}); save(); renderTab(); el('#newE').focus(); };
-window.act_delE = id=>{ const c=active(); c.events=c.events.filter(e=>e.id!==id); delete c.results[id]; if(ui.resEvent===id)ui.resEvent=null; save(); renderTab(); };
+function reBody(focusId){ if(ui.view==='edit') renderStep(); else renderTab(); if(focusId) el('#'+focusId)?.focus(); }
+window.act_addP = ()=>{ const i=el('#newP'); const v=i.value.trim(); if(!v)return; active().participants.push({id:uid(),name:v}); save(); reBody('newP'); };
+window.act_delP = id=>{ const c=active(); c.participants=c.participants.filter(p=>p.id!==id); Object.values(c.results).forEach(r=>delete r[id]); save(); reBody(); };
+window.act_addE = ()=>{ const i=el('#newE'); const v=i.value.trim(); if(!v)return; active().events.push({id:uid(),name:v}); save(); reBody('newE'); };
+window.act_delE = id=>{ const c=active(); c.events=c.events.filter(e=>e.id!==id); delete c.results[id]; if(ui.resEvent===id)ui.resEvent=null; save(); reBody(); };
 window.act_delChamp = ()=>{ if(!confirm('Excluir este campeonato e todos os resultados?'))return; const c=active(); delChampApi(c.id); state.champs=state.champs.filter(x=>x.id!==c.id); setActive(state.champs[0]?.id||null); ui.view='dashboard'; render(); };
-window.setMode = m=>{ active().mode=m; save(); renderTab(); };
-window.setScheme = s=>{ active().ptsScheme=s; save(); renderTab(); };
-window.setPts = (i,v)=>{ active().ptsTable[i]=v===''?0:Math.max(0,Math.round(v)); save(); };
-window.setName = v=>{ active().name=v||'Sem nome'; save(); };
+window.setMode = m=>{ const c=active(); c.mode=m; c.pontConfigured=true; save(); renderStep(); };
+window.setScheme = s=>{ const c=active(); c.ptsScheme=s; c.pontConfigured=true; save(); renderStep(); };
+window.setPts = (i,v)=>{ const c=active(); c.ptsTable[i]=v===''?0:Math.max(0,Math.round(v)); c.pontConfigured=true; save(); updateWizChecks(); };
+window.setName = v=>{ active().name=v||'Sem nome'; save(); updateWizChecks(); };
 window.setDate = (which,v)=>{ const c=active(); if(which==='start')c.dateStart=v; else c.dateEnd=v; save(); };
 window.setStatus = v=>{ active().status=v; save(); };
 
