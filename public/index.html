@@ -196,6 +196,40 @@
   .userchip{font-size:12px;color:var(--steel);font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .userchip b{color:var(--chalk)}
 
+  /* ---------- dashboard (lista de campeonatos) ---------- */
+  .dash-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+  .dash-title{font-family:'Anton';font-weight:400;font-size:24px;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:10px}
+  .dash-title .cal{font-size:20px}
+  .dash-table{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .dash-row{display:grid;grid-template-columns:2fr 1.4fr 1fr 44px;align-items:center;gap:14px;padding:15px 18px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s}
+  .dash-row:last-child{border-bottom:none}
+  .dash-row:not(.dash-th):hover{background:var(--raised)}
+  .dash-th{cursor:default;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--steel);font-weight:600}
+  .dash-th:hover{background:none}
+  .dc-name{font-weight:700;font-size:15.5px}
+  .dc-date{font-family:'JetBrains Mono';font-size:13px;color:var(--steel)}
+  .dc-box{font-size:13px;color:var(--steel)}
+  .dc-act{text-align:right}
+  .rowdel{background:none;border:none;cursor:pointer;font-size:15px;opacity:.55;padding:4px}
+  .rowdel:hover{opacity:1}
+  .badge{display:inline-block;font-size:12px;font-weight:700;padding:4px 11px;border-radius:20px}
+  .st-draft{background:rgba(141,149,192,.16);color:var(--steel)}
+  .st-live{background:var(--arc-soft);color:var(--arc-hi)}
+  .st-done{background:rgba(54,194,107,.16);color:#5fd88c}
+  body.admin .dash-row{grid-template-columns:2fr 1.3fr .9fr 1.1fr 44px}
+
+  /* ---------- cabeçalho da gestão ---------- */
+  .manage-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+  .manage-title{font-family:'Anton';font-weight:400;font-size:22px;text-transform:uppercase;letter-spacing:.5px}
+  .mini-box{font-family:'Archivo';font-size:11px;letter-spacing:1px;color:var(--arc-hi);border:1px solid var(--line);border-radius:6px;padding:2px 8px;vertical-align:middle;margin-left:6px}
+
+  /* ---------- modal ---------- */
+  #modal:empty{display:none}
+  .modal-back{position:fixed;inset:0;background:rgba(4,11,38,.72);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+  .modal-card{width:100%;max-width:440px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px}
+  .modal-card h3{font-family:'Anton';font-weight:400;font-size:20px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:18px}
+  .modal-card input[type=date],.modal-card input[type=text]{width:100%;background:var(--raised);border:1px solid var(--line);color:var(--chalk);border-radius:9px;padding:10px 12px;font-family:inherit;font-size:14px}
+
   /* ---------- tela de login ---------- */
   .auth{display:grid;grid-template-columns:1.12fr .88fr;min-height:100vh}
   .auth-hero{
@@ -276,7 +310,7 @@
 const ACTKEY = 'hawksbox:active';   // lembra qual campeonato estava aberto neste navegador
 const TOKKEY = 'hawksbox:token';
 let state = { champs: [], activeId: null };
-let ui = { tab: 'placar', resEvent: null, open: {} };
+let ui = { view: 'dashboard', tab: 'placar', resEvent: null, open: {} };
 let AUTH = { token: null, user: null };
 
 function getToken(){ try{ return localStorage.getItem(TOKKEY)||''; }catch(e){ return ''; } }
@@ -325,12 +359,17 @@ function setSync(s){
   e.className = 'sync ' + s;
 }
 
-function newChamp(name){
+function newChamp(name, opts){
+  opts = opts||{};
   const c = { id:uid(), name:name||'Novo campeonato', mode:'points',
+    dateStart:opts.dateStart||'', dateEnd:opts.dateEnd||'', status:opts.status||'rascunho',
     ptsScheme:'auto', ptsTable:[100,94,88,82,76,70,64,60,56,52,48,44,40,36,32,28,24,20,16,12],
     participants:[], events:[], results:{} };
   state.champs.push(c); state.activeId=c.id; return c;
 }
+const STATUS = { rascunho:{label:'Rascunho',cls:'st-draft'}, andamento:{label:'Em andamento',cls:'st-live'}, finalizado:{label:'Finalizado',cls:'st-done'} };
+function fmtDate(iso){ if(!iso) return ''; const p=iso.split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : iso; }
+function dateRange(c){ const a=fmtDate(c.dateStart), b=fmtDate(c.dateEnd); if(a&&b) return a+' – '+b; return a||b||'—'; }
 
 /* ============================ cálculo do ranking ============================ */
 function eventPoints(champ, placement){
@@ -385,18 +424,14 @@ function renderTopbar(){
 
 function render(){
   renderTopbar();
-  const c = active();
   const app = el('#app');
-  if(!c){
-    app.innerHTML = `
-      <div class="empty">
-        <div class="big">Nenhum campeonato ainda</div>
-        <p>Crie um campeonato, cadastre os atletas ou equipes, adicione as provas (WODs) e lance as colocações. O ranking é calculado ao vivo.</p>
-        <button class="btn primary" onclick="act_create()">Criar campeonato</button>
-      </div>`;
-    return;
-  }
+  if(ui.view!=='manage' || !active()){ renderDashboard(app); return; }
+  const c = active();
   app.innerHTML = `
+    <div class="manage-head">
+      <button class="btn sm ghost" onclick="backToList()">← Meus campeonatos</button>
+      <div class="manage-title">${esc(c.name)} ${AUTH.user&&AUTH.user.role==='admin'&&c._boxName?`<span class="mini-box">${esc(c._boxName)}</span>`:''}</div>
+    </div>
     <div class="tabs">
       ${tab('placar','Placar')}
       ${tab('resultados','Lançar resultados')}
@@ -407,6 +442,46 @@ function render(){
     <div id="tabbody"></div>`;
   renderTab();
 }
+
+function renderDashboard(app){
+  const admin = AUTH.user && AUTH.user.role==='admin';
+  const list = state.champs;
+  app.innerHTML = `
+    <div class="dash-head">
+      <h2 class="dash-title"><span class="cal">📅</span> ${admin?'Campeonatos (todas as boxes)':'Seus Campeonatos'}</h2>
+      <button class="btn primary" onclick="openNewChamp()">+ Novo Campeonato</button>
+    </div>
+    ${list.length ? `
+    <div class="dash-table">
+      <div class="dash-row dash-th">
+        <div>Campeonato</div><div>Data</div><div>Status</div>${admin?'<div>Box</div>':''}<div></div>
+      </div>
+      ${list.map(c=>{
+        const s = STATUS[c.status]||STATUS.rascunho;
+        return `<div class="dash-row" onclick="openChamp('${c.id}')">
+          <div class="dc-name">${esc(c.name)}</div>
+          <div class="dc-date">${dateRange(c)}</div>
+          <div><span class="badge ${s.cls}">${s.label}</span></div>
+          ${admin?`<div class="dc-box">${esc(c._boxName||'—')}</div>`:''}
+          <div class="dc-act"><button class="rowdel" title="Excluir" onclick="event.stopPropagation();delChampFromList('${c.id}')">🗑</button></div>
+        </div>`;
+      }).join('')}
+    </div>` : `
+    <div class="empty">
+      <div class="big">Nenhum campeonato ainda</div>
+      <p>Crie seu primeiro campeonato para começar a cadastrar atletas, provas e lançar resultados.</p>
+      <button class="btn primary" onclick="openNewChamp()">+ Novo Campeonato</button>
+    </div>`}`;
+}
+window.openChamp = id => { setActive(id); ui.view='manage'; ui.tab='placar'; render(); };
+window.backToList = () => { ui.view='dashboard'; render(); };
+window.delChampFromList = id => {
+  const c = state.champs.find(x=>x.id===id); if(!c) return;
+  if(!confirm('Excluir "'+c.name+'" e todos os resultados?')) return;
+  delChampApi(id); state.champs=state.champs.filter(x=>x.id!==id);
+  if(state.activeId===id) setActive(state.champs[0]?.id||null);
+  render();
+};
 function tab(id,label){ return `<button class="tab ${ui.tab===id?'active':''}" onclick="setTab('${id}')">${label}</button>`; }
 window.setTab = id => { ui.tab=id; renderTab(); };
 
@@ -546,9 +621,19 @@ function tabAjustes(c, body){
     <div class="card">
       <h2>Campeonato</h2>
       <label class="fld">Nome</label>
-      <div class="row" style="margin-bottom:18px">
+      <div class="row" style="margin-bottom:16px">
         <input type="text" id="champName" value="${esc(c.name)}" oninput="setName(this.value)">
       </div>
+      <div class="row" style="gap:12px;margin-bottom:16px">
+        <div style="flex:1"><label class="fld">Data de início</label><input type="date" value="${c.dateStart||''}" oninput="setDate('start',this.value)"></div>
+        <div style="flex:1"><label class="fld">Data de término</label><input type="date" value="${c.dateEnd||''}" oninput="setDate('end',this.value)"></div>
+      </div>
+      <label class="fld">Status</label>
+      <select class="champ-pick" style="width:100%;margin-bottom:18px" onchange="setStatus(this.value)">
+        <option value="rascunho" ${c.status==='rascunho'?'selected':''}>Rascunho</option>
+        <option value="andamento" ${c.status==='andamento'?'selected':''}>Em andamento</option>
+        <option value="finalizado" ${c.status==='finalizado'?'selected':''}>Finalizado</option>
+      </select>
       <div class="hint" style="margin-bottom:14px">Desempate: maior nº de vitórias de prova, depois melhor colocação individual. Em ambos os sistemas, um <b>empate de colocação</b> na mesma prova dá a mesma pontuação aos envolvidos.</div>
       <button class="btn danger" onclick="act_delChamp()">Excluir este campeonato</button>
     </div>`;
@@ -575,19 +660,55 @@ function emptyMsg(big,txt,tab,btn){
 
 /* ============================ ações ============================ */
 function refreshAll(){ save(); render(); }
-window.act_create = ()=>{ const n=prompt('Nome do campeonato:','Throwdown da Hawks'); if(n!==null){ const c=newChamp(n.trim()||'Novo campeonato'); setActive(c.id); putChamp(c); render(); } };
+
+window.openNewChamp = ()=>{
+  let m = el('#modal');
+  if(!m){ m=document.createElement('div'); m.id='modal'; document.body.appendChild(m); }
+  m.innerHTML = `
+    <div class="modal-back" onclick="closeModal(event)">
+      <div class="modal-card" onclick="event.stopPropagation()">
+        <h3>Novo campeonato</h3>
+        <label class="fld">Nome do campeonato</label>
+        <input type="text" id="nc_name" placeholder="Ex.: Hawks Games 2026" style="margin-bottom:14px">
+        <div class="row" style="gap:12px;margin-bottom:14px">
+          <div style="flex:1"><label class="fld">Data de início</label><input type="date" id="nc_start"></div>
+          <div style="flex:1"><label class="fld">Data de término</label><input type="date" id="nc_end"></div>
+        </div>
+        <label class="fld">Status</label>
+        <select id="nc_status" class="champ-pick" style="width:100%;margin-bottom:20px">
+          <option value="rascunho">Rascunho</option>
+          <option value="andamento">Em andamento</option>
+          <option value="finalizado">Finalizado</option>
+        </select>
+        <div class="row" style="gap:10px;justify-content:flex-end">
+          <button class="btn ghost" onclick="closeModal()">Cancelar</button>
+          <button class="btn primary" onclick="createChamp()">Criar campeonato</button>
+        </div>
+      </div>
+    </div>`;
+  setTimeout(()=>el('#nc_name')?.focus(),50);
+};
+window.closeModal = (e)=>{ if(e&&e.target&&!e.target.classList.contains('modal-back'))return; const m=el('#modal'); if(m) m.innerHTML=''; };
+window.createChamp = ()=>{
+  const name=(el('#nc_name')?.value||'').trim()||'Novo campeonato';
+  const c=newChamp(name,{dateStart:el('#nc_start')?.value||'', dateEnd:el('#nc_end')?.value||'', status:el('#nc_status')?.value||'rascunho'});
+  setActive(c.id); putChamp(c); closeModal(); ui.view='manage'; ui.tab='placar'; render();
+};
+
 window.act_addP = ()=>{ const i=el('#newP'); const v=i.value.trim(); if(!v)return; active().participants.push({id:uid(),name:v}); save(); renderTab(); el('#newP').focus(); };
 window.act_delP = id=>{ const c=active(); c.participants=c.participants.filter(p=>p.id!==id); Object.values(c.results).forEach(r=>delete r[id]); save(); renderTab(); };
 window.act_addE = ()=>{ const i=el('#newE'); const v=i.value.trim(); if(!v)return; active().events.push({id:uid(),name:v}); save(); renderTab(); el('#newE').focus(); };
 window.act_delE = id=>{ const c=active(); c.events=c.events.filter(e=>e.id!==id); delete c.results[id]; if(ui.resEvent===id)ui.resEvent=null; save(); renderTab(); };
-window.act_delChamp = ()=>{ if(!confirm('Excluir este campeonato e todos os resultados?'))return; const c=active(); delChampApi(c.id); state.champs=state.champs.filter(x=>x.id!==c.id); setActive(state.champs[0]?.id||null); render(); };
-window.setMode = m=>{ active().mode=m; refreshAll(); };
+window.act_delChamp = ()=>{ if(!confirm('Excluir este campeonato e todos os resultados?'))return; const c=active(); delChampApi(c.id); state.champs=state.champs.filter(x=>x.id!==c.id); setActive(state.champs[0]?.id||null); ui.view='dashboard'; render(); };
+window.setMode = m=>{ active().mode=m; save(); renderTab(); };
 window.setScheme = s=>{ active().ptsScheme=s; save(); renderTab(); };
 window.setPts = (i,v)=>{ active().ptsTable[i]=v===''?0:Math.max(0,Math.round(v)); save(); };
-window.setName = v=>{ active().name=v||'Sem nome'; save(); renderTopbar(); };
+window.setName = v=>{ active().name=v||'Sem nome'; save(); };
+window.setDate = (which,v)=>{ const c=active(); if(which==='start')c.dateStart=v; else c.dateEnd=v; save(); };
+window.setStatus = v=>{ active().status=v; save(); };
 
-el('#champPick').addEventListener('change', e=>{ setActive(e.target.value); ui={tab:ui.tab,resEvent:null,open:{}}; render(); });
-el('#newChampBtn').addEventListener('click', ()=>window.act_create());
+el('#champPick').addEventListener('change', e=>{ openChamp(e.target.value); });
+el('#newChampBtn').addEventListener('click', ()=>window.openNewChamp());
 
 window.exportCSV = ()=>{
   const c=active(); const rows=standings(c);
@@ -701,13 +822,14 @@ async function enterApp(){
   el('#authscreen').style.display='none';
   el('#appscreen').style.display='block';
   const u=AUTH.user||{}; const chip=el('#userchip');
+  document.body.classList.toggle('admin', u.role==='admin');
   if(chip){
     if(u.role==='admin') chip.innerHTML='<b>Admin</b> · todas as boxes';
     else chip.innerHTML = (u.name?('Olá, <b>'+esc(u.name.split(' ')[0])+'</b>'):'') + (u.boxName?(' · '+esc(u.boxName)):'');
   }
   await load(); render();
 }
-function logout(){ setToken(null); AUTH.user=null; state={champs:[],activeId:null}; el('#userchip').innerHTML=''; showAuth(); }
+function logout(){ setToken(null); AUTH.user=null; state={champs:[],activeId:null}; ui.view='dashboard'; document.body.classList.remove('admin'); el('#userchip').innerHTML=''; showAuth(); }
 
 /* ============================ boot ============================ */
 (async function(){
