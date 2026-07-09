@@ -224,20 +224,48 @@
 
   /* ---------- wizard de edição ---------- */
   .crumb{font-family:'Archivo';font-size:13px;color:var(--steel);font-weight:500;letter-spacing:0;text-transform:none}
-  .wizard{display:grid;grid-template-columns:250px 1fr;gap:22px;align-items:start}
+  .wizard{display:grid;grid-template-columns:270px 1fr;gap:22px;align-items:start}
   .wiz-nav{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
-  .wiz-group{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--steel);font-weight:700;padding:6px 10px 10px}
-  .wiz-step{display:flex;align-items:center;gap:11px;width:100%;background:none;border:none;color:var(--steel);font-family:inherit;font-size:14px;font-weight:600;padding:11px 10px;border-radius:9px;cursor:pointer;text-align:left;margin-bottom:2px}
-  .wiz-step:hover{background:var(--raised);color:var(--chalk)}
-  .wiz-step.on{background:var(--arc-soft);color:var(--chalk)}
+  .wiz-grouphead{display:flex;align-items:center;gap:9px;font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:var(--arc-hi);font-weight:700;padding:14px 8px 8px}
+  .wiz-grouphead:first-child{padding-top:4px}
+  .wiz-num{width:20px;height:20px;flex:0 0 auto;border-radius:50%;border:1.5px solid var(--arc);color:var(--arc-hi);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+  .wiz-step{display:flex;align-items:center;gap:11px;width:100%;background:none;border:none;color:var(--chalk);font-family:inherit;padding:10px 10px;border-radius:9px;cursor:pointer;text-align:left;margin-bottom:2px}
+  .wiz-step:hover{background:var(--raised)}
+  .wiz-step.on{background:var(--arc-soft)}
+  .wiz-txt{flex:1;min-width:0;display:flex;flex-direction:column}
+  .wiz-label{font-size:14px;font-weight:600}
+  .wiz-sub{font-size:11.5px;color:var(--steel)}
+  .wiz-step.locked{opacity:.6}
+  .wiz-step.locked .wiz-label{color:var(--steel)}
+  .wiz-lock{font-size:13px;opacity:.7}
   .wiz-check{width:20px;height:20px;flex:0 0 auto;border-radius:50%;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
   .wiz-check.done{background:var(--ok);border-color:var(--ok)}
   .wiz-body{min-width:0}
+  @media(max-width:760px){.wizard{grid-template-columns:1fr}}
+
+  /* Divulgação / página de inscrição */
+  .promo-box{display:flex;gap:16px;align-items:center;background:var(--raised);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .promo-ico{font-size:30px}
+  .switch{width:46px;height:26px;border-radius:20px;background:var(--line);flex:0 0 auto;position:relative;cursor:not-allowed}
+  .switch span{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}
+  .switch.off span{left:3px}
+  .pick2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:22px}
+  @media(max-width:620px){.pick2{grid-template-columns:1fr}}
+  .pick-card{display:flex;gap:11px;align-items:flex-start;text-align:left;background:var(--raised);border:1px solid var(--line);border-radius:12px;padding:15px;cursor:pointer;color:var(--chalk);font-family:inherit;font-size:14px}
+  .pick-card:hover{border-color:#3a4680}
+  .pick-card.on{border-color:var(--arc);background:var(--arc-soft)}
+  .pick-radio{width:18px;height:18px;flex:0 0 auto;border-radius:50%;border:2px solid var(--steel);margin-top:2px;position:relative}
+  .pick-card.on .pick-radio{border-color:var(--arc)}
+  .pick-card.on .pick-radio::after{content:'';position:absolute;inset:3px;border-radius:50%;background:var(--arc)}
+  .feat3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:620px){.feat3{grid-template-columns:1fr}}
+  .feat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .feat-ico{font-size:22px;margin-bottom:6px}
+  .soon{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--arc-hi);background:var(--arc-soft);border-radius:20px;padding:3px 10px;vertical-align:middle;margin-left:8px}
   .cat-form{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
   .sub-blue{color:var(--arc-hi);font-weight:700;font-size:14px;margin-bottom:4px}
   .cat-tag{font-size:12px;font-weight:700;background:var(--arc-soft);color:var(--arc-hi);border-radius:20px;padding:3px 11px}
   .cat-size{font-family:'JetBrains Mono';font-size:13px;color:var(--steel)}
-  @media(max-width:760px){.wizard{grid-template-columns:1fr}}
   .badge{display:inline-block;font-size:12px;font-weight:700;padding:4px 11px;border-radius:20px}
   .st-draft{background:rgba(141,149,192,.16);color:var(--steel)}
   .st-live{background:var(--arc-soft);color:var(--arc-hi)}
@@ -456,7 +484,21 @@ function render(){
   const c = active();
   const boxTag = AUTH.user&&AUTH.user.role==='admin'&&c._boxName?`<span class="mini-box">${esc(c._boxName)}</span>`:'';
   if(ui.view==='edit'){
-    const steps = [['info','Informações básicas'],['categorias','Categorias'],['atletas','Atletas / Equipes'],['provas','Provas (WODs)'],['pontuacao','Pontuação']];
+    const groups = [
+      { n:1, title:'Informações gerais', steps:[
+        ['info','Informações básicas','Detalhes do campeonato'],
+        ['categorias','Categorias','Cadastre as categorias'],
+        ['atletas','Atletas / Equipes','Cadastre os competidores'] ]},
+      { n:2, title:'Divulgação', steps:[
+        ['inscricao','Página de inscrição','Configure suas vendas online'],
+        ['gateway','Gateway de pagamento','Integre suas cobranças',true],
+        ['personalizacao','Personalização','Personalize sua página',true],
+        ['venda','Venda de Inscrições','Defina o preço das inscrições',true],
+        ['cupons','Cupons','Crie seus cupons de desconto',true] ]},
+      { n:3, title:'WODs', steps:[
+        ['provas','Provas (WODs)','Cadastre os WODs do evento'],
+        ['pontuacao','Pontuação','Defina o padrão de pontuação'] ]},
+    ];
     app.innerHTML = `
       <div class="manage-head">
         <button class="btn sm ghost" onclick="backToList()">← Campeonatos</button>
@@ -464,8 +506,14 @@ function render(){
       </div>
       <div class="wizard">
         <div class="wiz-nav">
-          <div class="wiz-group">Configuração</div>
-          ${steps.map(([id,label])=>`<button class="wiz-step ${ui.step===id?'on':''}" data-step="${id}" onclick="setStep('${id}')"><span class="wiz-check ${stepDone(c,id)?'done':''}">${stepDone(c,id)?'✓':''}</span>${label}</button>`).join('')}
+          ${groups.map(g=>`
+            <div class="wiz-grouphead"><span class="wiz-num">${g.n}</span> ${g.title}</div>
+            ${g.steps.map(([id,label,sub,locked])=>`
+              <button class="wiz-step ${ui.step===id?'on':''} ${locked?'locked':''}" data-step="${id}" onclick="setStep('${id}')">
+                <span class="wiz-txt"><span class="wiz-label">${label}</span><span class="wiz-sub">${sub}</span></span>
+                ${locked?'<span class="wiz-lock">🔒</span>':`<span class="wiz-check ${stepDone(c,id)?'done':''}">${stepDone(c,id)?'✓':''}</span>`}
+              </button>`).join('')}
+          `).join('')}
           <button class="btn primary" style="margin-top:16px;width:100%" onclick="openControl('${c.id}')">Ir para o Painel ▸</button>
         </div>
         <div class="wiz-body" id="tabbody"></div>
@@ -494,6 +542,7 @@ function stepDone(c,id){
   if(id==='atletas') return c.participants.length>0;
   if(id==='provas') return c.events.length>0;
   if(id==='pontuacao') return !!c.pontConfigured;
+  if(id==='inscricao') return !!c.inscricaoTouched;
   return false;
 }
 function updateWizChecks(){
@@ -509,7 +558,8 @@ function renderStep(){
   document.querySelectorAll('.wiz-step').forEach(t=>t.classList.remove('on'));
   const active_btn = document.querySelector('.wiz-step[data-step="'+ui.step+'"]'); if(active_btn) active_btn.classList.add('on');
   const c = active(); const body = el('#tabbody'); if(!body) return;
-  ({info:tabInfo, categorias:tabCategorias, atletas:tabAtletas, provas:tabProvas, pontuacao:tabPontuacao}[ui.step]||tabInfo)(c, body);
+  ({info:tabInfo, categorias:tabCategorias, atletas:tabAtletas, provas:tabProvas, pontuacao:tabPontuacao,
+    inscricao:tabInscricao, gateway:tabGateway, personalizacao:tabPersonalizacao, venda:tabVenda, cupons:tabCupons}[ui.step]||tabInfo)(c, body);
   updateWizChecks();
 }
 
@@ -762,6 +812,55 @@ window.act_addCat = ()=>{
   save(); renderStep(); el('#cat_name')?.focus();
 };
 window.act_delCat = id=>{ const c=active(); c.categories=(c.categories||[]).filter(x=>x.id!==id); save(); renderStep(); };
+/* ---- DIVULGAÇÃO: PÁGINA DE INSCRIÇÃO ---- */
+function tabInscricao(c, body){
+  const tipo = c.tipoEvento || 'interno';
+  body.innerHTML = `
+    <div class="card">
+      <h2>Página de inscrições</h2>
+      <div class="promo-box">
+        <div class="promo-ico">📣</div>
+        <div>
+          <div class="sub-blue" style="margin-bottom:4px">Deseja utilizar a página de inscrições?</div>
+          <div class="hint">Com a página de inscrição você poderá <b>vender as inscrições do seu campeonato online</b> e divulgá-lo pelo app. Essa funcionalidade terá custo adicional por transação. <b>(Em breve)</b></div>
+        </div>
+        <div class="switch off" title="Em breve"><span></span></div>
+      </div>
+      <div class="sub-blue" style="margin:22px 0 4px">Selecione o tipo do seu campeonato</div>
+      <div class="hint" style="margin-bottom:14px">Você pretende divulgar seu campeonato publicamente?</div>
+      <div class="pick2">
+        <button class="pick-card ${tipo==='publico'?'on':''}" onclick="setTipo('publico')">
+          <span class="pick-radio"></span>
+          <span><b>Campeonato Público</b><br><span class="hint">Quero divulgar meu evento e permitir que qualquer atleta se cadastre. (Em breve)</span></span>
+        </button>
+        <button class="pick-card ${tipo==='interno'?'on':''}" onclick="setTipo('interno')">
+          <span class="pick-radio"></span>
+          <span><b>Campeonato Interno</b><br><span class="hint">Evento apenas para um grupo seleto de pessoas — você cadastra os atletas manualmente.</span></span>
+        </button>
+      </div>
+      <div class="feat3">
+        <div class="feat"><div class="feat-ico">📣</div><b>Divulgação</b><div class="hint">Divulgue seu evento no app pra atletas encontrarem seu campeonato.</div></div>
+        <div class="feat"><div class="feat-ico">👥</div><b>Inscrições online</b><div class="hint">Todo o processo de inscrição e controle financeiro feito automaticamente.</div></div>
+        <div class="feat"><div class="feat-ico">🎨</div><b>Site personalizado</b><div class="hint">Crie um site com a identidade do seu evento, central de informações pros atletas.</div></div>
+      </div>
+    </div>`;
+}
+window.setTipo = t=>{ const c=active(); c.tipoEvento=t; c.inscricaoTouched=true; save(); renderStep(); };
+
+function emBreve(title, ico, desc){
+  return `<div class="card">
+    <h2>${title} <span class="soon">Em breve</span></h2>
+    <div class="empty">
+      <div style="font-size:40px;margin-bottom:10px">${ico}</div>
+      <div class="big">Em breve</div>
+      <p>${desc}</p>
+    </div>
+  </div>`;
+}
+function tabGateway(c, body){ body.innerHTML = emBreve('Gateway de pagamento','🔒','Aqui você vai integrar suas cobranças (cartão, Pix, boleto) para receber as inscrições. Estamos preparando essa integração.'); }
+function tabPersonalizacao(c, body){ body.innerHTML = emBreve('Personalização','🎨','Personalize a página pública do seu campeonato com a identidade da sua box (cores, logo, banner).'); }
+function tabVenda(c, body){ body.innerHTML = emBreve('Venda de Inscrições','💳','Defina lotes, preços e o período de vendas das inscrições do seu evento.'); }
+function tabCupons(c, body){ body.innerHTML = emBreve('Cupons','🏷️','Crie cupons de desconto para promoções e parcerias na venda de inscrições.'); }
 /* ---- PONTUAÇÃO ---- */
 function tabPontuacao(c, body){
   body.innerHTML = `
