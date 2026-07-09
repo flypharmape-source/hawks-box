@@ -1,0 +1,1166 @@
+<!--
+  WOD Scoreboard — gestor de campeonatos estilo CrossFit
+  Dois sistemas de pontuação: "pontos por colocação" (mais vence) e "invertido/golfe" (menos vence)
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --pit:#040B26;            /* navy base (logo Hawks Box) */
+    --panel:#0B1440;          /* painéis */
+    --raised:#15214F;         /* cartões elevados */
+    --line:#26326B;           /* hairlines */
+    --chalk:#F2F3FA;          /* texto principal */
+    --steel:#8D95C0;          /* texto secundário (lavanda) */
+    --arc:#F82584;            /* rosa de ação (logo) */
+    --arc-hi:#FF4DA0;         /* rosa claro p/ gradiente */
+    --arc-soft:rgba(248,37,132,.16);
+    --gold:#F5B53D;           /* pódio 1º */
+    --silver:#C7CDD6;         /* pódio 2º */
+    --bronze:#CD8A52;         /* pódio 3º */
+    --danger:#FF5A7A;
+    --ok:#36C26B;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--pit);
+    background-image:radial-gradient(120% 80% at 50% -10%, rgba(248,37,132,.10), transparent 55%);
+    background-attachment:fixed;
+    color:var(--chalk);
+    font-family:'Archivo',system-ui,sans-serif;
+    font-size:15px;line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{margin:0}
+  button{font-family:inherit}
+  ::selection{background:var(--arc);color:#fff}
+
+  .wrap{max-width:1120px;margin:0 auto;padding:0 18px 80px}
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    position:sticky;top:0;z-index:30;
+    background:linear-gradient(180deg,var(--pit) 70%,rgba(4,11,38,.86));
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);
+    padding:14px 0 13px;
+    margin-bottom:24px;
+  }
+  .topbar .inner{max-width:1120px;margin:0 auto;padding:0 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .brand{display:flex;flex-direction:column;gap:2px;flex:0 0 auto}
+  .brand .mark{
+    font-family:'Anton';font-size:24px;letter-spacing:1px;line-height:1;
+    text-transform:uppercase;color:var(--chalk);
+  }
+  .brand .mark b{
+    font-weight:400;
+    background:linear-gradient(180deg,var(--arc-hi),var(--arc));
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  }
+  .brand .tag{font-size:9.5px;letter-spacing:3px;text-transform:uppercase;color:var(--arc-hi);font-weight:600}
+  .topbar-spacer{flex:1 1 auto}
+  .sync{font-family:'JetBrains Mono';font-size:11px;letter-spacing:.3px;color:var(--steel);min-width:104px;text-align:right}
+  .sync.saved{color:var(--ok)}
+  .sync.error{color:var(--danger)}
+
+  .champ-pick{
+    background:var(--raised);border:1px solid var(--line);color:var(--chalk);
+    border-radius:9px;padding:9px 12px;font-size:14px;font-weight:600;min-width:170px;
+    appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23878F9C' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 12px center;padding-right:30px;cursor:pointer;
+  }
+
+  /* ---------- buttons ---------- */
+  .btn{
+    border:1px solid var(--line);background:var(--raised);color:var(--chalk);
+    border-radius:9px;padding:9px 14px;font-size:14px;font-weight:600;cursor:pointer;
+    transition:border-color .15s, background .15s, transform .04s;
+  }
+  .btn:hover{border-color:#475063}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:linear-gradient(135deg,var(--arc-hi),var(--arc));border-color:transparent;color:#fff;font-weight:700}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{background:transparent}
+  .btn.sm{padding:6px 10px;font-size:13px;border-radius:8px}
+  .btn.danger{color:var(--danger);border-color:transparent;background:transparent}
+  .btn.danger:hover{background:rgba(255,90,82,.1)}
+  .btn:focus-visible,.champ-pick:focus-visible,input:focus-visible,select:focus-visible{
+    outline:2px solid var(--arc);outline-offset:2px}
+
+  /* ---------- tabs ---------- */
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:22px;flex-wrap:wrap}
+  .tab{
+    background:none;border:none;color:var(--steel);font-weight:600;font-size:14px;
+    padding:11px 15px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;
+    letter-spacing:.2px;
+  }
+  .tab:hover{color:var(--chalk)}
+  .tab.active{color:var(--chalk);border-bottom-color:var(--arc)}
+
+  /* ---------- layout ---------- */
+  .grid{display:grid;grid-template-columns:1fr;gap:18px}
+  @media(min-width:860px){.grid.split{grid-template-columns:1fr 320px}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .card h2{font-family:'Anton';font-weight:400;font-size:15px;letter-spacing:1.5px;text-transform:uppercase;color:var(--steel);margin-bottom:14px;display:flex;align-items:center;gap:10px}
+  .card h2 .count{font-family:'JetBrains Mono';font-size:12px;color:var(--steel);background:var(--raised);border:1px solid var(--line);border-radius:6px;padding:1px 7px}
+
+  label.fld{display:block;font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--steel);margin:0 0 6px;font-weight:600}
+  input[type=text],input[type=number]{
+    width:100%;background:var(--raised);border:1px solid var(--line);color:var(--chalk);
+    border-radius:9px;padding:10px 12px;font-size:14px;font-family:inherit;
+  }
+  input[type=number]{font-family:'JetBrains Mono';text-align:center;font-weight:700}
+  .row{display:flex;gap:9px;align-items:center}
+  .row.wrap{flex-wrap:wrap}
+  .muted{color:var(--steel)}
+  .hint{font-size:12.5px;color:var(--steel);line-height:1.5}
+
+  /* list items (atletas / provas) */
+  .item{display:flex;align-items:center;gap:12px;padding:11px 13px;background:var(--raised);border:1px solid var(--line);border-radius:10px;margin-bottom:8px}
+  .item .idx{font-family:'JetBrains Mono';font-size:13px;color:var(--steel);width:26px;flex:0 0 auto}
+  .item .nm{flex:1 1 auto;font-weight:600}
+  .item .nm.team::before{content:'';}
+
+  /* ---------- mode toggle ---------- */
+  .modebox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:18px}
+  .seg{display:inline-flex;background:var(--raised);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px;width:100%}
+  .seg button{flex:1;border:none;background:none;color:var(--steel);font-weight:700;font-size:13px;padding:10px 8px;border-radius:8px;cursor:pointer;letter-spacing:.3px;transition:.15s}
+  .seg button.on{background:linear-gradient(135deg,var(--arc-hi),var(--arc));color:#fff}
+  .seg button.on.golf{background:transparent;color:var(--arc-hi);box-shadow:inset 0 0 0 2px var(--arc)}
+  .mode-explain{margin-top:12px;font-size:13px;color:var(--steel);display:flex;gap:9px;align-items:flex-start}
+  .mode-explain .arrow{font-family:'JetBrains Mono';font-weight:700;color:var(--chalk)}
+
+  /* ---------- leaderboard ---------- */
+  .board-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  .board-title{font-family:'Anton';font-size:26px;letter-spacing:.5px;text-transform:uppercase;line-height:1}
+  .board-rule{font-family:'JetBrains Mono';font-size:12px;font-weight:700;letter-spacing:.5px;padding:5px 10px;border-radius:7px;border:1px solid var(--line);color:var(--chalk);background:var(--raised);white-space:nowrap}
+  .board-rule .dir{color:var(--arc)}
+  .board-rule.golf .dir{color:var(--arc-hi)}
+
+  .lbrow{
+    display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:12px;
+    padding:13px 14px;border:1px solid var(--line);border-left-width:4px;border-left-color:var(--line);
+    background:var(--panel);border-radius:11px;margin-top:9px;cursor:pointer;transition:border-color .15s,background .15s;
+  }
+  .lbrow:hover{border-color:#475063}
+  .lbrow .rank{font-family:'JetBrains Mono';font-weight:700;font-size:22px;color:var(--steel)}
+  .lbrow .who{min-width:0}
+  .lbrow .who .name{font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lbrow .who .sub{font-size:12px;color:var(--steel);font-family:'JetBrains Mono';margin-top:2px}
+  .lbrow .pts{text-align:right}
+  .lbrow .pts .n{font-family:'JetBrains Mono';font-weight:700;font-size:24px;line-height:1}
+  .lbrow .pts .u{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--steel)}
+  .lbrow.p1{border-left-color:var(--gold)}
+  .lbrow.p1 .rank{color:var(--gold)}
+  .lbrow.p2{border-left-color:var(--silver)}
+  .lbrow.p2 .rank{color:var(--silver)}
+  .lbrow.p3{border-left-color:var(--bronze)}
+  .lbrow.p3 .rank{color:var(--bronze)}
+
+  .breakdown{display:none;padding:4px 14px 14px 60px;margin-top:-9px;border:1px solid var(--line);border-top:none;border-radius:0 0 11px 11px;background:var(--panel)}
+  .breakdown.open{display:block}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
+  .chip{font-family:'JetBrains Mono';font-size:12px;background:var(--raised);border:1px solid var(--line);border-radius:7px;padding:5px 9px;display:flex;gap:7px;align-items:center}
+  .chip .lab{color:var(--steel)}
+  .chip .pl{font-weight:700}
+  .chip.win .pl{color:var(--gold)}
+  .chip .eq{color:var(--steel)}
+  .chip .ptval{font-weight:700;color:var(--arc)}
+  .board-rule.golf ~ * .chip .ptval{color:var(--gold)}
+
+  /* empty states */
+  .empty{text-align:center;padding:46px 20px;color:var(--steel)}
+  .empty .big{font-family:'Anton';font-size:22px;color:var(--chalk);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+  .empty p{max-width:420px;margin:0 auto 18px}
+
+  /* results entry */
+  .ev-pick{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px}
+  .ev-chip{border:1px solid var(--line);background:var(--raised);color:var(--steel);border-radius:9px;padding:8px 13px;font-weight:600;cursor:pointer;font-size:13px}
+  .ev-chip.on{border-color:var(--arc);color:var(--chalk);background:var(--arc-soft)}
+  .res-row{display:grid;grid-template-columns:1fr 92px;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+  .res-row:last-child{border-bottom:none}
+  .res-row .athlete{font-weight:600}
+  .res-row .live{font-family:'JetBrains Mono';font-size:12px;color:var(--steel);margin-top:2px}
+
+  table.exp{width:100%;border-collapse:collapse}
+  .footnote{margin-top:14px;font-size:12px;color:var(--steel)}
+  a{color:var(--arc)}
+  @media print{.topbar,.tabs,.modebox,.btn,.no-print{display:none!important}.card{border:none;padding:0}}
+
+  /* ---------- userchip / logout ---------- */
+  .userchip{font-size:12px;color:var(--steel);font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .userchip b{color:var(--chalk)}
+
+  /* ---------- dashboard (lista de campeonatos) ---------- */
+  .dash-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+  .dash-title{font-family:'Anton';font-weight:400;font-size:24px;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:10px}
+  .dash-title .cal{font-size:20px}
+  .dash-table{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:visible}
+  .dash-row:first-child{border-radius:14px 14px 0 0}
+  .dash-row:last-child{border-radius:0 0 14px 14px}
+  .dash-row{display:grid;grid-template-columns:2fr 1.4fr 1fr 44px;align-items:center;gap:14px;padding:15px 18px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s}
+  .dash-row:last-child{border-bottom:none}
+  .dash-row:not(.dash-th):hover{background:var(--raised)}
+  .dash-th{cursor:default;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--steel);font-weight:600}
+  .dash-th:hover{background:none}
+  .dc-name{font-weight:700;font-size:15.5px}
+  .dc-date{font-family:'JetBrains Mono';font-size:13px;color:var(--steel)}
+  .dc-box{font-size:13px;color:var(--steel)}
+  .dc-act{text-align:right;position:relative}
+  .kebab{background:none;border:none;cursor:pointer;font-size:20px;line-height:1;color:var(--steel);padding:2px 8px;border-radius:7px}
+  .kebab:hover{background:var(--raised);color:var(--chalk)}
+  .rowmenu{position:absolute;right:0;top:34px;z-index:20;background:var(--raised);border:1px solid var(--line);border-radius:11px;padding:6px;min-width:210px;box-shadow:0 12px 34px rgba(0,0,0,.45);text-align:left}
+  .rowmenu button{display:flex;align-items:center;gap:11px;width:100%;background:none;border:none;color:var(--chalk);font-family:inherit;font-size:14px;font-weight:600;padding:10px 12px;border-radius:8px;cursor:pointer;text-align:left}
+  .rowmenu button:hover{background:var(--panel)}
+  .rowmenu button span{width:18px;text-align:center;opacity:.85}
+  .rowmenu button.danger{color:var(--danger)}
+  .rowmenu button.danger:hover{background:rgba(255,90,122,.1)}
+  .rowdel{background:none;border:none;cursor:pointer;font-size:15px;opacity:.55;padding:4px}
+
+  /* ---------- wizard de edição ---------- */
+  .crumb{font-family:'Archivo';font-size:13px;color:var(--steel);font-weight:500;letter-spacing:0;text-transform:none}
+  .wizard{display:grid;grid-template-columns:270px 1fr;gap:22px;align-items:start}
+  .wiz-nav{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .wiz-grouphead{display:flex;align-items:center;gap:9px;font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:var(--arc-hi);font-weight:700;padding:14px 8px 8px}
+  .wiz-grouphead:first-child{padding-top:4px}
+  .wiz-num{width:20px;height:20px;flex:0 0 auto;border-radius:50%;border:1.5px solid var(--arc);color:var(--arc-hi);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+  .wiz-step{display:flex;align-items:center;gap:11px;width:100%;background:none;border:none;color:var(--chalk);font-family:inherit;padding:10px 10px;border-radius:9px;cursor:pointer;text-align:left;margin-bottom:2px}
+  .wiz-step:hover{background:var(--raised)}
+  .wiz-step.on{background:var(--arc-soft)}
+  .wiz-txt{flex:1;min-width:0;display:flex;flex-direction:column}
+  .wiz-label{font-size:14px;font-weight:600}
+  .wiz-sub{font-size:11.5px;color:var(--steel)}
+  .wiz-step.locked{opacity:.6}
+  .wiz-step.locked .wiz-label{color:var(--steel)}
+  .wiz-lock{font-size:13px;opacity:.7}
+  .wiz-check{width:20px;height:20px;flex:0 0 auto;border-radius:50%;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
+  .wiz-check.done{background:var(--ok);border-color:var(--ok)}
+  .wiz-body{min-width:0}
+  @media(max-width:760px){.wizard{grid-template-columns:1fr}}
+
+  /* Divulgação / página de inscrição */
+  .promo-box{display:flex;gap:16px;align-items:center;background:var(--raised);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .promo-ico{font-size:30px}
+  .switch{width:46px;height:26px;border-radius:20px;background:var(--line);flex:0 0 auto;position:relative;cursor:not-allowed}
+  .switch span{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}
+  .switch.off span{left:3px}
+  .pick2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:22px}
+  @media(max-width:620px){.pick2{grid-template-columns:1fr}}
+  .pick-card{display:flex;gap:11px;align-items:flex-start;text-align:left;background:var(--raised);border:1px solid var(--line);border-radius:12px;padding:15px;cursor:pointer;color:var(--chalk);font-family:inherit;font-size:14px}
+  .pick-card:hover{border-color:#3a4680}
+  .pick-card.on{border-color:var(--arc);background:var(--arc-soft)}
+  .pick-radio{width:18px;height:18px;flex:0 0 auto;border-radius:50%;border:2px solid var(--steel);margin-top:2px;position:relative}
+  .pick-card.on .pick-radio{border-color:var(--arc)}
+  .pick-card.on .pick-radio::after{content:'';position:absolute;inset:3px;border-radius:50%;background:var(--arc)}
+  .feat3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:620px){.feat3{grid-template-columns:1fr}}
+  .feat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .feat-ico{font-size:22px;margin-bottom:6px}
+  .soon{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--arc-hi);background:var(--arc-soft);border-radius:20px;padding:3px 10px;vertical-align:middle;margin-left:8px}
+  .cat-form{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .sub-blue{color:var(--arc-hi);font-weight:700;font-size:14px;margin-bottom:4px}
+  .cat-tag{font-size:12px;font-weight:700;background:var(--arc-soft);color:var(--arc-hi);border-radius:20px;padding:3px 11px}
+  .cat-size{font-family:'JetBrains Mono';font-size:13px;color:var(--steel)}
+  /* WODs */
+  .wod-item{border:1px solid var(--line);border-radius:11px;margin-bottom:9px;background:var(--raised)}
+  .wod-row{display:flex;align-items:center;gap:11px;padding:11px 13px}
+  .wod-ord{font-family:'JetBrains Mono';font-weight:700;color:var(--arc-hi);width:22px;text-align:center;flex:0 0 auto}
+  .wod-main{flex:1;min-width:0}
+  .wod-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wod-meta{font-size:12px;color:var(--steel);font-family:'JetBrains Mono';margin-top:2px}
+  .wod-arrows{display:flex;flex-direction:column;gap:2px;flex:0 0 auto}
+  .wod-arrows button{background:none;border:1px solid var(--line);color:var(--steel);border-radius:5px;cursor:pointer;font-size:9px;line-height:1;padding:2px 5px}
+  .wod-arrows button:hover:not(:disabled){color:var(--chalk);border-color:#3a4680}
+  .wod-arrows button:disabled{opacity:.3;cursor:default}
+  .wod-exp{background:none;border:1px solid var(--line);color:var(--chalk);border-radius:7px;cursor:pointer;padding:5px 9px;font-size:12px;flex:0 0 auto}
+  .wod-desc{padding:0 14px 14px 47px;color:var(--chalk);font-size:14px;line-height:1.55;white-space:pre-wrap}
+  .wod-textarea{width:100%;min-height:120px;background:var(--raised);border:1px solid var(--line);color:var(--chalk);border-radius:11px;padding:12px 14px;font-family:inherit;font-size:14px;line-height:1.5;resize:vertical}
+  .badge{display:inline-block;font-size:12px;font-weight:700;padding:4px 11px;border-radius:20px}
+  .st-draft{background:rgba(141,149,192,.16);color:var(--steel)}
+  .st-live{background:var(--arc-soft);color:var(--arc-hi)}
+  .st-done{background:rgba(54,194,107,.16);color:#5fd88c}
+  body.admin .dash-row{grid-template-columns:2fr 1.3fr .9fr 1.1fr 44px}
+
+  /* ---------- cabeçalho da gestão ---------- */
+  .manage-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+  .manage-title{font-family:'Anton';font-weight:400;font-size:22px;text-transform:uppercase;letter-spacing:.5px}
+  .mini-box{font-family:'Archivo';font-size:11px;letter-spacing:1px;color:var(--arc-hi);border:1px solid var(--line);border-radius:6px;padding:2px 8px;vertical-align:middle;margin-left:6px}
+
+  /* ---------- modal ---------- */
+  #modal:empty{display:none}
+  .modal-back{position:fixed;inset:0;background:rgba(4,11,38,.72);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+  .modal-card{width:100%;max-width:440px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px}
+  .modal-card h3{font-family:'Anton';font-weight:400;font-size:20px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:18px}
+  .modal-card input[type=date],.modal-card input[type=text]{width:100%;background:var(--raised);border:1px solid var(--line);color:var(--chalk);border-radius:9px;padding:10px 12px;font-family:inherit;font-size:14px}
+
+  /* ---------- tela de login ---------- */
+  .auth{display:grid;grid-template-columns:1.12fr .88fr;min-height:100vh}
+  .auth-hero{
+    position:relative;overflow:hidden;padding:54px 52px;
+    display:flex;flex-direction:column;justify-content:space-between;gap:40px;
+    background:
+      radial-gradient(120% 90% at 15% 0%, rgba(248,37,132,.22), transparent 55%),
+      linear-gradient(160deg,#0A1338 0%,#040B26 60%);
+  }
+  .auth-hero::after{
+    content:'';position:absolute;inset:0;opacity:.5;pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M0 34 L23 12 L46 34' stroke='%23F82584' stroke-width='2' fill='none' opacity='0.07'/%3E%3C/svg%3E");
+  }
+  .auth-hero > *{position:relative;z-index:1}
+  .auth-logo{font-family:'Anton';font-size:30px;letter-spacing:1px;text-transform:uppercase;color:#fff}
+  .auth-logo b{font-weight:400;background:linear-gradient(180deg,var(--arc-hi),var(--arc));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .auth-logo .tag{display:block;font-family:'Archivo';font-size:10px;letter-spacing:3px;color:var(--arc-hi);margin-top:4px;font-weight:600}
+  .auth-headline{font-family:'Anton';font-weight:400;font-size:min(4.4vw,50px);line-height:1.02;text-transform:uppercase;letter-spacing:.5px}
+  .auth-headline .pink{background:linear-gradient(120deg,var(--arc-hi),var(--arc));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .auth-sub{color:var(--steel);font-size:15px;max-width:440px;margin-top:16px;line-height:1.6}
+  .auth-feats{list-style:none;padding:0;margin:22px 0 0;display:flex;flex-direction:column;gap:10px}
+  .auth-feats li{display:flex;gap:10px;align-items:center;color:var(--chalk);font-size:14px;font-weight:500}
+  .auth-feats .tick{color:var(--arc);font-weight:700}
+
+  .auth-form-wrap{display:flex;align-items:center;justify-content:center;padding:36px 28px;background:var(--pit);overflow-y:auto;max-height:100vh}
+  .auth-card{width:100%;max-width:390px}
+  .doc-row{display:flex;gap:8px}
+  .doc-type{background:var(--raised);border:1px solid var(--line);color:var(--chalk);border-radius:11px;padding:0 10px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer}
+  .auth-row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:420px){.auth-row2{grid-template-columns:1fr}}
+  .auth-card h2{font-family:'Anton';font-weight:400;font-size:26px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+  .auth-card .lead{color:var(--steel);font-size:14px;margin-bottom:24px}
+  .auth-field{margin-bottom:16px}
+  .auth-field label{display:block;font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--steel);margin:0 0 7px;font-weight:600}
+  .auth-input{position:relative}
+  .auth-input input{width:100%;background:var(--raised);border:1px solid var(--line);color:var(--chalk);border-radius:11px;padding:13px 14px;font-size:15px;font-family:inherit}
+  .auth-input .eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--steel);cursor:pointer;font-size:15px;padding:4px}
+  .auth-btn{width:100%;border:none;border-radius:11px;padding:14px;font-size:15px;font-weight:700;color:#fff;cursor:pointer;background:linear-gradient(135deg,var(--arc-hi),var(--arc));margin-top:6px}
+  .auth-btn:hover{filter:brightness(1.08)}
+  .auth-btn:disabled{opacity:.6;cursor:default;filter:none}
+  .auth-alt{text-align:center;color:var(--steel);font-size:13.5px;margin-top:22px}
+  .auth-link{background:none;border:none;color:var(--arc-hi);font-weight:700;cursor:pointer;font-size:13.5px;font-family:inherit;padding:0}
+  .auth-link.small{display:block;margin:-6px 0 4px auto;font-weight:600;color:var(--steel)}
+  .auth-msg{font-size:13.5px;border-radius:9px;padding:10px 12px;margin-bottom:16px;display:none}
+  .auth-msg.err{display:block;background:rgba(255,90,122,.12);border:1px solid rgba(255,90,122,.35);color:#ff8fa3}
+  .auth-msg.ok{display:block;background:rgba(54,194,107,.12);border:1px solid rgba(54,194,107,.35);color:#7fe0a5}
+  @media(max-width:840px){
+    .auth{grid-template-columns:1fr}
+    .auth-hero{min-height:auto;padding:38px 30px;gap:22px}
+    .auth-feats{display:none}
+    .auth-headline{font-size:32px}
+  }
+</style>
+
+<div id="authscreen"></div>
+
+<div id="appscreen" style="display:none">
+<div class="topbar">
+  <div class="inner">
+    <div class="brand">
+      <span class="mark">HAWKS <b>BOX</b></span>
+      <span class="tag">Força · Foco · Performance</span>
+    </div>
+    <span class="topbar-spacer"></span>
+    <span id="sync" class="sync"></span>
+    <select id="champPick" class="champ-pick no-print" title="Trocar campeonato"></select>
+    <button class="btn sm" id="newChampBtn">+ Novo</button>
+    <span id="userchip" class="userchip no-print"></span>
+    <button class="btn sm ghost no-print" id="logoutBtn">Sair</button>
+  </div>
+</div>
+
+<div class="wrap" id="app"></div>
+</div>
+
+<script>
+/* ============================ estado + API (banco) ============================ */
+const ACTKEY = 'hawksbox:active';   // lembra qual campeonato estava aberto neste navegador
+const TOKKEY = 'hawksbox:token';
+let state = { champs: [], activeId: null };
+let ui = { view: 'dashboard', tab: 'placar', resEvent: null, open: {} };
+let AUTH = { token: null, user: null };
+
+function getToken(){ try{ return localStorage.getItem(TOKKEY)||''; }catch(e){ return ''; } }
+function setToken(t){ AUTH.token=t||null; try{ t?localStorage.setItem(TOKKEY,t):localStorage.removeItem(TOKKEY); }catch(e){} }
+
+// fetch com token; se o servidor devolver 401, volta pra tela de login
+async function authFetch(url, opts={}){
+  const h = Object.assign({}, opts.headers||{}, AUTH.token?{Authorization:'Bearer '+AUTH.token}:{});
+  const res = await fetch(url, Object.assign({}, opts, {headers:h}));
+  if(res.status===401){ logout(); throw new Error('sessão expirada'); }
+  return res;
+}
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+function active(){ return state.champs.find(c=>c.id===state.activeId) || null; }
+function setActive(id){ state.activeId = id; try{ localStorage.setItem(ACTKEY, id||''); }catch(e){} }
+
+async function load(){
+  try{
+    const res = await authFetch('/api/championships');
+    if(res.ok){ const arr = await res.json(); state.champs = Array.isArray(arr)?arr:[]; }
+  }catch(e){ /* sem conexão ou sessão expirada */ }
+  let want=null; try{ want = localStorage.getItem(ACTKEY); }catch(e){}
+  state.activeId = (want && state.champs.find(c=>c.id===want)) ? want : (state.champs[0]?.id || null);
+}
+
+let _saveTimer=null;
+function save(){
+  const c = active(); if(!c) return;
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(()=>putChamp(c), 400);   // agrupa edições rápidas (ex.: digitar colocações)
+  setSync('saving');
+}
+async function putChamp(c){
+  try{
+    const r = await authFetch('/api/championships/'+c.id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)});
+    setSync(r.ok ? 'saved' : 'error');
+  }catch(e){ setSync('error'); }
+}
+async function delChampApi(id){ try{ await authFetch('/api/championships/'+id, {method:'DELETE'}); }catch(e){} }
+async function syncFromServer(){ setSync('saving'); await load(); render(); setSync('saved'); }
+
+function setSync(s){
+  const e = document.getElementById('sync'); if(!e) return;
+  e.textContent = s==='saving' ? 'salvando…' : s==='saved' ? 'salvo na nuvem ✓' : 'erro de conexão';
+  e.className = 'sync ' + s;
+}
+
+function newChamp(name, opts){
+  opts = opts||{};
+  const c = { id:uid(), name:name||'Novo campeonato', mode:'points',
+    dateStart:opts.dateStart||'', dateEnd:opts.dateEnd||'', status:opts.status||'rascunho',
+    categories:[], loc:{cep:'',cidade:'',estado:'',logradouro:'',numero:'',complemento:'',bairro:''},
+    ptsScheme:'auto', ptsTable:[100,94,88,82,76,70,64,60,56,52,48,44,40,36,32,28,24,20,16,12],
+    participants:[], events:[], results:{} };
+  state.champs.push(c); state.activeId=c.id; return c;
+}
+const STATUS = { rascunho:{label:'Rascunho',cls:'st-draft'}, andamento:{label:'Em andamento',cls:'st-live'}, finalizado:{label:'Finalizado',cls:'st-done'} };
+function fmtDate(iso){ if(!iso) return ''; const p=iso.split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : iso; }
+function dateRange(c){ const a=fmtDate(c.dateStart), b=fmtDate(c.dateEnd); if(a&&b) return a+' – '+b; return a||b||'—'; }
+
+/* ============================ cálculo do ranking ============================ */
+function eventPoints(champ, placement){
+  // placement: inteiro >=1, ou null (sem resultado / DNF)
+  const n = champ.participants.length;
+  if(champ.mode==='golf'){
+    return placement==null ? n : placement;            // menos vence; em branco = última colocação
+  }
+  // modo pontos (mais vence)
+  if(placement==null) return 0;
+  if(champ.ptsScheme==='auto') return Math.max(0, n - placement + 1);
+  const t = champ.ptsTable;
+  return t[placement-1] != null ? t[placement-1] : 1;   // tabela personalizada
+}
+function standings(champ){
+  const rows = champ.participants.map(p=>{
+    let total=0, wins=0, best=Infinity;
+    const detail = champ.events.map(ev=>{
+      const pl = (champ.results[ev.id]||{})[p.id];
+      const placement = (pl===''||pl==null||isNaN(pl)) ? null : Math.round(pl);
+      const pts = eventPoints(champ, placement);
+      total += pts;
+      if(placement===1) wins++;
+      if(placement!=null && placement<best) best=placement;
+      return { ev, placement, pts };
+    });
+    return { p, total, wins, best, detail };
+  });
+  rows.sort((a,b)=>{
+    if(champ.mode==='golf'){ if(a.total!==b.total) return a.total-b.total; }
+    else { if(a.total!==b.total) return b.total-a.total; }
+    if(a.wins!==b.wins) return b.wins-a.wins;            // mais vitórias desempata
+    if(a.best!==b.best) return a.best-b.best;            // melhor colocação individual
+    return a.p.name.localeCompare(b.p.name);
+  });
+  return rows;
+}
+
+/* ============================ render ============================ */
+const el = s => document.querySelector(s);
+function esc(s){ return (s+'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function renderTopbar(){
+  const sel = el('#champPick');
+  const admin = AUTH.user && AUTH.user.role==='admin';
+  sel.innerHTML = state.champs.map(c=>{
+    const label = (admin && c._boxName) ? esc(c.name)+' · '+esc(c._boxName) : esc(c.name);
+    return `<option value="${c.id}" ${c.id===state.activeId?'selected':''}>${label}</option>`;
+  }).join('');
+  sel.style.display = state.champs.length ? '' : 'none';
+}
+
+function render(){
+  renderTopbar();
+  const app = el('#app');
+  if((ui.view!=='manage' && ui.view!=='edit') || !active()){ renderDashboard(app); return; }
+  const c = active();
+  const boxTag = AUTH.user&&AUTH.user.role==='admin'&&c._boxName?`<span class="mini-box">${esc(c._boxName)}</span>`:'';
+  if(ui.view==='edit'){
+    const groups = [
+      { n:1, title:'Informações gerais', steps:[
+        ['info','Informações básicas','Detalhes do campeonato'],
+        ['categorias','Categorias','Cadastre as categorias'],
+        ['atletas','Atletas / Equipes','Cadastre os competidores'] ]},
+      { n:2, title:'Divulgação', steps:[
+        ['inscricao','Página de inscrição','Configure suas vendas online'],
+        ['gateway','Gateway de pagamento','Integre suas cobranças',true],
+        ['personalizacao','Personalização','Personalize sua página',true],
+        ['venda','Venda de Inscrições','Defina o preço das inscrições',true],
+        ['cupons','Cupons','Crie seus cupons de desconto',true] ]},
+      { n:3, title:'WODs', steps:[
+        ['provas','Provas (WODs)','Cadastre os WODs do evento'],
+        ['pontuacao','Pontuação','Defina o padrão de pontuação'] ]},
+    ];
+    app.innerHTML = `
+      <div class="manage-head">
+        <button class="btn sm ghost" onclick="backToList()">← Campeonatos</button>
+        <div class="manage-title">🏆 ${esc(c.name)} ${boxTag} <span class="crumb">· editar</span></div>
+      </div>
+      <div class="wizard">
+        <div class="wiz-nav">
+          ${groups.map(g=>`
+            <div class="wiz-grouphead"><span class="wiz-num">${g.n}</span> ${g.title}</div>
+            ${g.steps.map(([id,label,sub,locked])=>`
+              <button class="wiz-step ${ui.step===id?'on':''} ${locked?'locked':''}" data-step="${id}" onclick="setStep('${id}')">
+                <span class="wiz-txt"><span class="wiz-label">${label}</span><span class="wiz-sub">${sub}</span></span>
+                ${locked?'<span class="wiz-lock">🔒</span>':`<span class="wiz-check ${stepDone(c,id)?'done':''}">${stepDone(c,id)?'✓':''}</span>`}
+              </button>`).join('')}
+          `).join('')}
+          <button class="btn primary" style="margin-top:16px;width:100%" onclick="openControl('${c.id}')">Ir para o Painel ▸</button>
+        </div>
+        <div class="wiz-body" id="tabbody"></div>
+      </div>`;
+    renderStep();
+    return;
+  }
+  // painel de controle (rodar o evento)
+  app.innerHTML = `
+    <div class="manage-head">
+      <button class="btn sm ghost" onclick="backToList()">← Meus campeonatos</button>
+      <div class="manage-title">${esc(c.name)} ${boxTag}</div>
+      <span class="topbar-spacer"></span>
+      <button class="btn sm" onclick="openEdit('${c.id}')">✎ Editar campeonato</button>
+    </div>
+    <div class="tabs">
+      ${tab('placar','Placar')}
+      ${tab('resultados','Lançar resultados')}
+    </div>
+    <div id="tabbody"></div>`;
+  renderTab();
+}
+function stepDone(c,id){
+  if(id==='info') return !!(c.name && c.name!=='Novo campeonato');
+  if(id==='categorias') return (c.categories||[]).length>0;
+  if(id==='atletas') return c.participants.length>0;
+  if(id==='provas') return c.events.length>0;
+  if(id==='pontuacao') return !!c.pontConfigured;
+  if(id==='inscricao') return !!c.inscricaoTouched;
+  return false;
+}
+function updateWizChecks(){
+  const c = active(); if(!c) return;
+  document.querySelectorAll('.wiz-step[data-step]').forEach(btn=>{
+    const chk = btn.querySelector('.wiz-check'); if(!chk) return;
+    if(stepDone(c, btn.getAttribute('data-step'))){ chk.classList.add('done'); chk.textContent='✓'; }
+    else { chk.classList.remove('done'); chk.textContent=''; }
+  });
+}
+window.setStep = id => { ui.step=id; renderStep(); };
+function renderStep(){
+  document.querySelectorAll('.wiz-step').forEach(t=>t.classList.remove('on'));
+  const active_btn = document.querySelector('.wiz-step[data-step="'+ui.step+'"]'); if(active_btn) active_btn.classList.add('on');
+  const c = active(); const body = el('#tabbody'); if(!body) return;
+  ({info:tabInfo, categorias:tabCategorias, atletas:tabAtletas, provas:tabProvas, pontuacao:tabPontuacao,
+    inscricao:tabInscricao, gateway:tabGateway, personalizacao:tabPersonalizacao, venda:tabVenda, cupons:tabCupons}[ui.step]||tabInfo)(c, body);
+  updateWizChecks();
+}
+
+function renderDashboard(app){
+  const admin = AUTH.user && AUTH.user.role==='admin';
+  const list = state.champs;
+  app.innerHTML = `
+    <div class="dash-head">
+      <h2 class="dash-title"><span class="cal">📅</span> ${admin?'Campeonatos (todas as boxes)':'Seus Campeonatos'}</h2>
+      <button class="btn primary" onclick="openNewChamp()">+ Novo Campeonato</button>
+    </div>
+    ${list.length ? `
+    <div class="dash-table">
+      <div class="dash-row dash-th">
+        <div>Campeonato</div><div>Data</div><div>Status</div>${admin?'<div>Box</div>':''}<div></div>
+      </div>
+      ${list.map(c=>{
+        const s = STATUS[c.status]||STATUS.rascunho;
+        return `<div class="dash-row" onclick="event.stopPropagation();toggleMenu('${c.id}')">
+          <div class="dc-name">${esc(c.name)}</div>
+          <div class="dc-date">${dateRange(c)}</div>
+          <div><span class="badge ${s.cls}">${s.label}</span></div>
+          ${admin?`<div class="dc-box">${esc(c._boxName||'—')}</div>`:''}
+          <div class="dc-act">
+            <button class="kebab" title="Opções" onclick="event.stopPropagation();toggleMenu('${c.id}')">⋮</button>
+            ${ui.menuOpen===c.id ? `
+            <div class="rowmenu" onclick="event.stopPropagation()">
+              <button onclick="openEdit('${c.id}')"><span>✎</span> Editar</button>
+              <button onclick="openControl('${c.id}')"><span>▦</span> Painel de Controle</button>
+              <button class="danger" onclick="delChampFromList('${c.id}')"><span>🗑</span> Remover</button>
+            </div>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : `
+    <div class="empty">
+      <div class="big">Nenhum campeonato ainda</div>
+      <p>Crie seu primeiro campeonato para começar a cadastrar atletas, provas e lançar resultados.</p>
+      <button class="btn primary" onclick="openNewChamp()">+ Novo Campeonato</button>
+    </div>`}`;
+}
+window.openControl = id => { ui.menuOpen=null; setActive(id); ui.view='manage'; ui.tab='placar'; render(); };
+window.openEdit = id => { ui.menuOpen=null; setActive(id); ui.view='edit'; ui.step='info'; render(); };
+window.openChamp = id => window.openControl(id);
+window.toggleMenu = id => { ui.menuOpen = ui.menuOpen===id ? null : id; renderDashboard(el('#app')); };
+document.addEventListener('click', ()=>{ if(ui.menuOpen){ ui.menuOpen=null; if(ui.view==='dashboard') renderDashboard(el('#app')); } });
+window.backToList = () => { ui.view='dashboard'; render(); };
+window.delChampFromList = id => {
+  const c = state.champs.find(x=>x.id===id); if(!c) return;
+  ui.menuOpen=null;
+  if(!confirm('Excluir "'+c.name+'" e todos os resultados?')) { render(); return; }
+  delChampApi(id); state.champs=state.champs.filter(x=>x.id!==id);
+  if(state.activeId===id) setActive(state.champs[0]?.id||null);
+  ui.view='dashboard'; render();
+};
+function tab(id,label){ return `<button class="tab ${ui.tab===id?'active':''}" onclick="setTab('${id}')">${label}</button>`; }
+window.setTab = id => { ui.tab=id; renderTab(); };
+
+function renderTab(){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  const c = active(); const body = el('#tabbody'); if(!body) return;
+  ({placar:tabPlacar, resultados:tabResultados}[ui.tab]||tabPlacar)(c, body);
+}
+
+/* ---- PLACAR ---- */
+function tabPlacar(c, body){
+  body.innerHTML = `<div id="leaderboard"></div>`;
+  renderLeaderboard();
+}
+function renderLeaderboard(){
+  const c = active(); const box = el('#leaderboard'); if(!box) return;
+  const golf = c.mode==='golf';
+  if(!c.participants.length){
+    box.innerHTML = `<div class="empty"><div class="big">Sem atletas</div><p>Cadastre atletas ou equipes na edição do campeonato para ver o placar.</p><button class="btn primary" onclick="goEdit('atletas')">Cadastrar atletas</button></div>`;
+    return;
+  }
+  const rows = standings(c);
+  const ruleTxt = golf ? 'MENOS PONTOS VENCE' : 'MAIS PONTOS VENCE';
+  const dir = golf ? '▲ menor' : '▼ maior';
+  box.innerHTML = `
+    <div class="board-head">
+      <div class="board-title">${esc(c.name)}</div>
+      <div class="board-rule ${golf?'golf':''}">${ruleTxt} · <span class="dir">${dir}</span></div>
+    </div>
+    <div class="hint" style="margin-bottom:6px">${c.events.length} prova(s) · ${c.participants.length} competidor(es) · toque numa linha para ver a quebra por prova</div>
+    ${rows.map((r,i)=>lbRow(c,r,i,golf)).join('')}
+    <div class="row no-print" style="margin-top:18px;gap:9px">
+      <button class="btn sm" onclick="syncFromServer()">Sincronizar</button>
+      <button class="btn sm" onclick="exportCSV()">Exportar CSV</button>
+      <button class="btn sm" onclick="window.print()">Imprimir / PDF</button>
+    </div>`;
+}
+function lbRow(c,r,i,golf){
+  const pos=i+1; const cls = pos<=3?`p${pos}`:'';
+  const open = ui.open[r.p.id];
+  const chips = r.detail.map(d=>{
+    const pl = d.placement==null?'—':d.placement;
+    const win = d.placement===1?'win':'';
+    return `<span class="chip ${win}"><span class="lab">${esc(d.ev.name)}</span><span class="pl">${pl}º</span><span class="eq">=</span><span class="ptval">${d.pts}</span></span>`;
+  }).join('') || '<span class="hint">Nenhuma prova cadastrada.</span>';
+  return `
+    <div class="lbrow ${cls}" onclick="toggleRow('${r.p.id}')">
+      <div class="rank">${pos}</div>
+      <div class="who"><div class="name">${esc(r.p.name)}</div><div class="sub">${r.wins} vitória(s) · melhor ${r.best===Infinity?'—':r.best+'º'}</div></div>
+      <div class="pts"><div class="n">${r.total}</div><div class="u">pts</div></div>
+    </div>
+    <div class="breakdown ${open?'open':''}"><div class="chips">${chips}</div></div>`;
+}
+window.toggleRow = id => { ui.open[id]=!ui.open[id]; renderLeaderboard(); };
+
+/* ---- RESULTADOS ---- */
+function tabResultados(c, body){
+  if(!c.events.length){ body.innerHTML = emptyMsg('Sem provas','Adicione provas (WODs) primeiro para lançar resultados.','provas','Adicionar provas'); return; }
+  if(!c.participants.length){ body.innerHTML = emptyMsg('Sem atletas','Cadastre atletas ou equipes para lançar resultados.','atletas','Cadastrar atletas'); return; }
+  if(!ui.resEvent || !c.events.find(e=>e.id===ui.resEvent)) ui.resEvent = c.events[0].id;
+  body.innerHTML = `
+    <div class="card">
+      <h2>Lançar colocações</h2>
+      <div class="ev-pick">${c.events.map(e=>`<button class="ev-chip ${e.id===ui.resEvent?'on':''}" onclick="pickEvent('${e.id}')">${esc(e.name)}</button>`).join('')}</div>
+      <div class="hint" style="margin-bottom:12px">Digite a <b>colocação</b> de cada competidor nesta prova (1 = primeiro). Deixe em branco para ausência/DNF. A pontuação é calculada automaticamente conforme o sistema escolhido.</div>
+      <div id="resList"></div>
+    </div>`;
+  renderResList();
+}
+window.pickEvent = id => { ui.resEvent=id; renderTab(); };
+function renderResList(){
+  const c = active(); const box = el('#resList'); if(!box) return;
+  const ev = c.events.find(e=>e.id===ui.resEvent);
+  const res = c.results[ev.id] || (c.results[ev.id]={});
+  box.innerHTML = c.participants.map(p=>{
+    const v = res[p.id]; const placement=(v===''||v==null||isNaN(v))?null:Math.round(v);
+    const pts = eventPoints(c, placement);
+    return `<div class="res-row">
+      <div><div class="athlete">${esc(p.name)}</div><div class="live" id="live-${p.id}">${placement==null?'sem resultado':'vale '+pts+' pts'}</div></div>
+      <input type="number" min="1" step="1" value="${v??''}" placeholder="—" aria-label="Colocação de ${esc(p.name)}" oninput="setResult('${p.id}', this.value)">
+    </div>`;
+  }).join('');
+}
+window.setResult = (pid, val) => {
+  const c = active(); const ev = ui.resEvent;
+  if(!c.results[ev]) c.results[ev]={};
+  c.results[ev][pid] = val===''? '' : val;
+  const placement=(val===''||val==null||isNaN(val))?null:Math.round(val);
+  const live = el('#live-'+pid); if(live) live.textContent = placement==null?'sem resultado':'vale '+eventPoints(c,placement)+' pts';
+  save();
+};
+
+/* ---- ATLETAS ---- */
+function tabAtletas(c, body){
+  body.innerHTML = `
+    <div class="card">
+      <h2>Atletas / Equipes <span class="count">${c.participants.length}</span></h2>
+      <div class="row" style="margin-bottom:16px">
+        <input type="text" id="newP" placeholder="Nome do atleta ou da equipe" onkeydown="if(event.key==='Enter')act_addP()">
+        <button class="btn primary" onclick="act_addP()">Adicionar</button>
+      </div>
+      <div id="pList">${c.participants.map((p,i)=>`
+        <div class="item"><span class="idx">${String(i+1).padStart(2,'0')}</span><span class="nm">${esc(p.name)}</span>
+        <button class="btn danger sm" onclick="act_delP('${p.id}')">Remover</button></div>`).join('') || '<div class="hint">Nenhum competidor cadastrado ainda.</div>'}</div>
+    </div>`;
+}
+/* ---- PROVAS (WODs) ---- */
+const RESULT_TYPES = { tempo:'Tempo', reps:'Repetições', carga:'Carga (kg)', amrap:'AMRAP (rounds+reps)', pontos:'Pontos' };
+function tabProvas(c, body){
+  body.innerHTML = `
+    <div class="card">
+      <h2 style="justify-content:space-between">Provas (WODs) <span class="count">${c.events.length}</span>
+        <button class="btn primary sm" style="margin-left:auto" onclick="openWod(null)">+ Criar WOD</button>
+      </h2>
+      <div class="hint" style="margin-bottom:16px">A ordem dos WODs abaixo é a ordem que aparece no placar e no lançamento de resultados. Use as setas ▲▼ para reordenar. Clique em ▸ para ver a descrição da prova.</div>
+      ${c.events.length ? c.events.map((e,i)=>{
+        const open = ui.wodOpen===e.id;
+        return `<div class="wod-item">
+          <div class="wod-row">
+            <span class="wod-ord">${i+1}</span>
+            <div class="wod-main">
+              <div class="wod-name">${esc(e.name)}</div>
+              <div class="wod-meta">${RESULT_TYPES[e.resultType]||'Tempo'}${e.date?' · '+fmtDate(e.date):''}</div>
+            </div>
+            <span class="wod-arrows">
+              <button ${i===0?'disabled':''} onclick="moveWod('${e.id}',-1)" title="Subir">▲</button>
+              <button ${i===c.events.length-1?'disabled':''} onclick="moveWod('${e.id}',1)" title="Descer">▼</button>
+            </span>
+            <button class="btn sm" onclick="openWod('${e.id}')">✎ Editar</button>
+            <button class="btn danger sm" onclick="act_delE('${e.id}')">Remover</button>
+            <button class="wod-exp" onclick="toggleWod('${e.id}')">${open?'▲':'▸'}</button>
+          </div>
+          ${open?`<div class="wod-desc">${e.desc?esc(e.desc).replace(/\n/g,'<br>'):'<span class="hint">Sem descrição. Clique em “Editar” para adicionar a descrição da prova.</span>'}</div>`:''}
+        </div>`;
+      }).join('') : '<div class="hint">Nenhum WOD cadastrado ainda. Clique em “+ Criar WOD”.</div>'}
+    </div>`;
+}
+window.toggleWod = id => { ui.wodOpen = ui.wodOpen===id?null:id; renderStep(); };
+window.moveWod = (id,dir)=>{ const c=active(); const i=c.events.findIndex(e=>e.id===id); const j=i+dir; if(j<0||j>=c.events.length)return; const t=c.events[i]; c.events[i]=c.events[j]; c.events[j]=t; save(); renderStep(); };
+window.openWod = (id)=>{
+  const c=active(); const e = id ? c.events.find(x=>x.id===id) : null;
+  const opts = Object.entries(RESULT_TYPES).map(([k,v])=>`<option value="${k}" ${e&&e.resultType===k?'selected':''}>${v}</option>`).join('');
+  let m = el('#modal'); if(!m){ m=document.createElement('div'); m.id='modal'; document.body.appendChild(m); }
+  m.innerHTML = `
+    <div class="modal-back" onclick="closeModal(event)">
+      <div class="modal-card" onclick="event.stopPropagation()" style="max-width:560px">
+        <h3>${e?'Editar WOD':'Criar WOD'}</h3>
+        <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:14px">
+          <div style="flex:2;min-width:200px"><label class="fld">Título do WOD</label><input type="text" id="wod_name" value="${e?esc(e.name):''}" placeholder="Ex.: Agacha que passa Pt1"></div>
+          <div style="flex:1;min-width:150px"><label class="fld">Tipo de resultado</label><select id="wod_type" class="champ-pick" style="width:100%">${opts}</select></div>
+        </div>
+        <div style="margin-bottom:14px"><label class="fld">Data</label><input type="date" id="wod_date" value="${e?(e.date||''):''}" style="max-width:200px"></div>
+        <label class="fld">Descrição da prova</label>
+        <textarea id="wod_desc" class="wod-textarea" placeholder="Ex.: 4 Rounds For time&#10;400m run&#10;Max de Air Squat&#10;1 corre, enquanto 1 agacha.">${e?esc(e.desc||''):''}</textarea>
+        <div class="row" style="gap:10px;justify-content:flex-end;margin-top:18px">
+          <button class="btn ghost" onclick="closeModal()">Cancelar</button>
+          <button class="btn primary" onclick="saveWod('${id||''}')">${e?'Salvar alterações':'Criar WOD'}</button>
+        </div>
+      </div>
+    </div>`;
+  setTimeout(()=>el('#wod_name')?.focus(),50);
+};
+window.saveWod = (id)=>{
+  const c=active(); const name=(el('#wod_name')?.value||'').trim(); if(!name){ el('#wod_name')?.focus(); return; }
+  const data={ name, resultType:el('#wod_type')?.value||'tempo', date:el('#wod_date')?.value||'', desc:(el('#wod_desc')?.value||'').trim() };
+  if(id){ const e=c.events.find(x=>x.id===id); if(e) Object.assign(e,data); }
+  else { c.events.push(Object.assign({id:uid()},data)); }
+  save(); closeModal(); renderStep();
+};
+/* ---- INFORMAÇÕES BÁSICAS ---- */
+function tabInfo(c, body){
+  const L = c.loc || (c.loc={cep:'',cidade:'',estado:'',logradouro:'',numero:'',complemento:'',bairro:''});
+  body.innerHTML = `
+    <div class="card">
+      <h2>Informações básicas</h2>
+      <div class="sub-blue">Conte um pouco sobre o seu campeonato</div>
+      <div class="hint" style="margin-bottom:16px">Informe o nome e a data de início e fim do campeonato.</div>
+      <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:8px">
+        <div style="flex:2;min-width:200px"><label class="fld">Nome do campeonato</label><input type="text" id="champName" value="${esc(c.name)}" oninput="setName(this.value)"></div>
+        <div style="flex:1;min-width:130px"><label class="fld">Data de início</label><input type="date" value="${c.dateStart||''}" oninput="setDate('start',this.value)"></div>
+        <div style="flex:1;min-width:130px"><label class="fld">Data de término</label><input type="date" value="${c.dateEnd||''}" oninput="setDate('end',this.value)"></div>
+      </div>
+      <label class="fld" style="margin-top:8px">Status</label>
+      <select class="champ-pick" style="width:100%;max-width:240px" onchange="setStatus(this.value)">
+        <option value="rascunho" ${c.status==='rascunho'?'selected':''}>Rascunho</option>
+        <option value="andamento" ${c.status==='andamento'?'selected':''}>Em andamento</option>
+        <option value="finalizado" ${c.status==='finalizado'?'selected':''}>Finalizado</option>
+      </select>
+    </div>
+    <div class="card">
+      <h2>Onde o campeonato irá ocorrer?</h2>
+      <div class="hint" style="margin-bottom:16px">Estes dados ajudam os atletas a saberem onde será o evento. Digite o CEP para preencher automaticamente.</div>
+      <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="width:150px"><label class="fld">CEP</label><input type="text" value="${esc(L.cep||'')}" placeholder="00000-000" oninput="setLoc('cep',this.value)" onblur="buscaCep()"></div>
+        <div style="flex:2;min-width:180px"><label class="fld">Cidade</label><input type="text" value="${esc(L.cidade||'')}" oninput="setLoc('cidade',this.value)"></div>
+        <div style="width:90px"><label class="fld">Estado</label><input type="text" value="${esc(L.estado||'')}" maxlength="2" placeholder="UF" oninput="setLoc('estado',this.value)"></div>
+      </div>
+      <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="flex:2;min-width:180px"><label class="fld">Logradouro</label><input type="text" value="${esc(L.logradouro||'')}" oninput="setLoc('logradouro',this.value)"></div>
+        <div style="width:130px"><label class="fld">Número</label><input type="text" value="${esc(L.numero||'')}" oninput="setLoc('numero',this.value)"></div>
+      </div>
+      <div class="row" style="gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:180px"><label class="fld">Complemento</label><input type="text" value="${esc(L.complemento||'')}" oninput="setLoc('complemento',this.value)"></div>
+        <div style="flex:1;min-width:180px"><label class="fld">Bairro</label><input type="text" value="${esc(L.bairro||'')}" oninput="setLoc('bairro',this.value)"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Zona de perigo</h2>
+      <div class="hint" style="margin-bottom:14px">Excluir remove o campeonato e todos os resultados. Não dá pra desfazer.</div>
+      <button class="btn danger" onclick="act_delChamp()">Excluir este campeonato</button>
+    </div>`;
+}
+/* ---- CATEGORIAS ---- */
+function tabCategorias(c, body){
+  const cats = c.categories||(c.categories=[]);
+  const TIPOS = ['Individual','Masculino','Feminino','Misto'];
+  body.innerHTML = `
+    <div class="card">
+      <h2>Categorias <span class="count">${cats.length}</span></h2>
+      <div class="hint" style="margin-bottom:16px">Crie as divisões do campeonato (ex.: RX Individual, Scaled Duplas Misto). Depois você poderá vincular os atletas/equipes a cada categoria.</div>
+      <div class="cat-form">
+        <div style="flex:2;min-width:160px"><label class="fld">Nome da categoria</label><input type="text" id="cat_name" placeholder="Ex.: RX - Duplas Misto" onkeydown="if(event.key==='Enter')act_addCat()"></div>
+        <div style="flex:1;min-width:120px"><label class="fld">Tipo</label>
+          <select id="cat_type" class="champ-pick" style="width:100%">${TIPOS.map(t=>`<option>${t}</option>`).join('')}</select>
+        </div>
+        <div style="width:110px"><label class="fld">Nº atletas</label><input type="number" id="cat_size" min="1" value="1"></div>
+        <button class="btn primary" style="align-self:flex-end" onclick="act_addCat()">+ Criar</button>
+      </div>
+      <div style="margin-top:18px">${cats.length ? cats.map((ct,i)=>`
+        <div class="item">
+          <span class="idx">${String(i+1).padStart(2,'0')}</span>
+          <span class="nm">${esc(ct.name)}</span>
+          <span class="cat-tag">${esc(ct.type)}</span>
+          <span class="cat-size">👥 ${ct.size}</span>
+          <button class="btn danger sm" onclick="act_delCat('${ct.id}')">Remover</button>
+        </div>`).join('') : '<div class="hint">Nenhuma categoria criada ainda.</div>'}</div>
+    </div>`;
+}
+window.act_addCat = ()=>{
+  const c=active(); const name=(el('#cat_name')?.value||'').trim(); if(!name)return;
+  const type=el('#cat_type')?.value||'Individual';
+  const size=Math.max(1, Math.round(Number(el('#cat_size')?.value)||1));
+  (c.categories||(c.categories=[])).push({id:uid(),name,type,size});
+  save(); renderStep(); el('#cat_name')?.focus();
+};
+window.act_delCat = id=>{ const c=active(); c.categories=(c.categories||[]).filter(x=>x.id!==id); save(); renderStep(); };
+/* ---- DIVULGAÇÃO: PÁGINA DE INSCRIÇÃO ---- */
+function tabInscricao(c, body){
+  const tipo = c.tipoEvento || 'interno';
+  body.innerHTML = `
+    <div class="card">
+      <h2>Página de inscrições</h2>
+      <div class="promo-box">
+        <div class="promo-ico">📣</div>
+        <div>
+          <div class="sub-blue" style="margin-bottom:4px">Deseja utilizar a página de inscrições?</div>
+          <div class="hint">Com a página de inscrição você poderá <b>vender as inscrições do seu campeonato online</b> e divulgá-lo pelo app. Essa funcionalidade terá custo adicional por transação. <b>(Em breve)</b></div>
+        </div>
+        <div class="switch off" title="Em breve"><span></span></div>
+      </div>
+      <div class="sub-blue" style="margin:22px 0 4px">Selecione o tipo do seu campeonato</div>
+      <div class="hint" style="margin-bottom:14px">Você pretende divulgar seu campeonato publicamente?</div>
+      <div class="pick2">
+        <button class="pick-card ${tipo==='publico'?'on':''}" onclick="setTipo('publico')">
+          <span class="pick-radio"></span>
+          <span><b>Campeonato Público</b><br><span class="hint">Quero divulgar meu evento e permitir que qualquer atleta se cadastre. (Em breve)</span></span>
+        </button>
+        <button class="pick-card ${tipo==='interno'?'on':''}" onclick="setTipo('interno')">
+          <span class="pick-radio"></span>
+          <span><b>Campeonato Interno</b><br><span class="hint">Evento apenas para um grupo seleto de pessoas — você cadastra os atletas manualmente.</span></span>
+        </button>
+      </div>
+      <div class="feat3">
+        <div class="feat"><div class="feat-ico">📣</div><b>Divulgação</b><div class="hint">Divulgue seu evento no app pra atletas encontrarem seu campeonato.</div></div>
+        <div class="feat"><div class="feat-ico">👥</div><b>Inscrições online</b><div class="hint">Todo o processo de inscrição e controle financeiro feito automaticamente.</div></div>
+        <div class="feat"><div class="feat-ico">🎨</div><b>Site personalizado</b><div class="hint">Crie um site com a identidade do seu evento, central de informações pros atletas.</div></div>
+      </div>
+    </div>`;
+}
+window.setTipo = t=>{ const c=active(); c.tipoEvento=t; c.inscricaoTouched=true; save(); renderStep(); };
+
+function emBreve(title, ico, desc){
+  return `<div class="card">
+    <h2>${title} <span class="soon">Em breve</span></h2>
+    <div class="empty">
+      <div style="font-size:40px;margin-bottom:10px">${ico}</div>
+      <div class="big">Em breve</div>
+      <p>${desc}</p>
+    </div>
+  </div>`;
+}
+function tabGateway(c, body){ body.innerHTML = emBreve('Gateway de pagamento','🔒','Aqui você vai integrar suas cobranças (cartão, Pix, boleto) para receber as inscrições. Estamos preparando essa integração.'); }
+function tabPersonalizacao(c, body){ body.innerHTML = emBreve('Personalização','🎨','Personalize a página pública do seu campeonato com a identidade da sua box (cores, logo, banner).'); }
+function tabVenda(c, body){ body.innerHTML = emBreve('Venda de Inscrições','💳','Defina lotes, preços e o período de vendas das inscrições do seu evento.'); }
+function tabCupons(c, body){ body.innerHTML = emBreve('Cupons','🏷️','Crie cupons de desconto para promoções e parcerias na venda de inscrições.'); }
+/* ---- PONTUAÇÃO ---- */
+function tabPontuacao(c, body){
+  body.innerHTML = `
+    <div class="modebox">
+      <label class="fld">Modelo de pontuação — qual equipe fica em 1º?</label>
+      <div class="seg">
+        <button class="${c.mode==='points'?'on':''}" onclick="setMode('points')">↑ Mais pontos</button>
+        <button class="${c.mode==='golf'?'on golf':''}" onclick="setMode('golf')">↓ Menos pontos</button>
+      </div>
+      <div class="mode-explain">
+        ${c.mode==='points'
+          ? `<span class="arrow">+</span><span>Cada colocação vale uma quantidade de pontos (1º lugar = mais pontos). Somam-se todas as provas e <b>vence quem tiver mais pontos</b>.</span>`
+          : `<span class="arrow">−</span><span>A colocação vira a própria pontuação (1º lugar = 1 ponto, 2º = 2...). Somam-se todas as provas e <b>vence quem tiver menos pontos</b>.</span>`}
+      </div>
+      <div class="mode-explain"><span class="arrow">≡</span><span><b>Critério de desempate:</b> atleta mais bem colocado (maior nº de vitórias de prova, depois a melhor colocação individual).</span></div>
+    </div>
+    ${c.mode==='points' ? ptsConfig(c) : ''}`;
+}
+function ptsConfig(c){
+  return `<div class="card">
+    <h2>Tabela de pontos</h2>
+    <div class="seg" style="max-width:520px;margin-bottom:14px">
+      <button class="${c.ptsScheme==='auto'?'on':''}" onclick="setScheme('auto')">Automático (pelo nº de atletas)</button>
+      <button class="${c.ptsScheme==='table'?'on':''}" onclick="setScheme('table')">Tabela personalizada</button>
+    </div>
+    ${c.ptsScheme==='auto'
+      ? `<div class="hint">1º lugar vale o total de competidores; cada posição abaixo vale 1 ponto a menos (último vale 1). Escala sozinho conforme você adiciona atletas — bom para campeonatos internos de box.</div>`
+      : `<div class="hint" style="margin-bottom:12px">Defina quantos pontos vale cada colocação. Colocações além da tabela valem 1 ponto. Estilo CrossFit Games (100, 94, 88...).</div>
+         <div class="row wrap" id="ptsGrid">${c.ptsTable.map((v,i)=>`
+           <div style="width:78px"><label class="fld" style="text-align:center">${i+1}º</label>
+           <input type="number" min="0" value="${v}" oninput="setPts(${i}, this.value)"></div>`).join('')}</div>`}
+  </div>`;
+}
+
+function emptyMsg(big,txt,step,btn){
+  return `<div class="empty"><div class="big">${big}</div><p>${txt}</p><button class="btn primary" onclick="goEdit('${step}')">${btn}</button></div>`;
+}
+window.goEdit = step => { if(!active())return; ui.view='edit'; ui.step=step; render(); };
+
+/* ============================ ações ============================ */
+function refreshAll(){ save(); render(); }
+
+window.openNewChamp = ()=>{
+  let m = el('#modal');
+  if(!m){ m=document.createElement('div'); m.id='modal'; document.body.appendChild(m); }
+  m.innerHTML = `
+    <div class="modal-back" onclick="closeModal(event)">
+      <div class="modal-card" onclick="event.stopPropagation()">
+        <h3>Novo campeonato</h3>
+        <label class="fld">Nome do campeonato</label>
+        <input type="text" id="nc_name" placeholder="Ex.: Hawks Games 2026" style="margin-bottom:14px">
+        <div class="row" style="gap:12px;margin-bottom:14px">
+          <div style="flex:1"><label class="fld">Data de início</label><input type="date" id="nc_start"></div>
+          <div style="flex:1"><label class="fld">Data de término</label><input type="date" id="nc_end"></div>
+        </div>
+        <label class="fld">Status</label>
+        <select id="nc_status" class="champ-pick" style="width:100%;margin-bottom:20px">
+          <option value="rascunho">Rascunho</option>
+          <option value="andamento">Em andamento</option>
+          <option value="finalizado">Finalizado</option>
+        </select>
+        <div class="row" style="gap:10px;justify-content:flex-end">
+          <button class="btn ghost" onclick="closeModal()">Cancelar</button>
+          <button class="btn primary" onclick="createChamp()">Criar campeonato</button>
+        </div>
+      </div>
+    </div>`;
+  setTimeout(()=>el('#nc_name')?.focus(),50);
+};
+window.closeModal = (e)=>{ if(e&&e.target&&!e.target.classList.contains('modal-back'))return; const m=el('#modal'); if(m) m.innerHTML=''; };
+window.createChamp = ()=>{
+  const name=(el('#nc_name')?.value||'').trim()||'Novo campeonato';
+  const c=newChamp(name,{dateStart:el('#nc_start')?.value||'', dateEnd:el('#nc_end')?.value||'', status:el('#nc_status')?.value||'rascunho'});
+  setActive(c.id); putChamp(c); closeModal(); ui.view='manage'; ui.tab='placar'; render();
+};
+
+function reBody(focusId){ if(ui.view==='edit') renderStep(); else renderTab(); if(focusId) el('#'+focusId)?.focus(); }
+window.act_addP = ()=>{ const i=el('#newP'); const v=i.value.trim(); if(!v)return; active().participants.push({id:uid(),name:v}); save(); reBody('newP'); };
+window.act_delP = id=>{ const c=active(); c.participants=c.participants.filter(p=>p.id!==id); Object.values(c.results).forEach(r=>delete r[id]); save(); reBody(); };
+window.act_addE = ()=>{ const i=el('#newE'); const v=i.value.trim(); if(!v)return; active().events.push({id:uid(),name:v}); save(); reBody('newE'); };
+window.act_delE = id=>{ const c=active(); c.events=c.events.filter(e=>e.id!==id); delete c.results[id]; if(ui.resEvent===id)ui.resEvent=null; save(); reBody(); };
+window.act_delChamp = ()=>{ if(!confirm('Excluir este campeonato e todos os resultados?'))return; const c=active(); delChampApi(c.id); state.champs=state.champs.filter(x=>x.id!==c.id); setActive(state.champs[0]?.id||null); ui.view='dashboard'; render(); };
+window.setMode = m=>{ const c=active(); c.mode=m; c.pontConfigured=true; save(); renderStep(); };
+window.setScheme = s=>{ const c=active(); c.ptsScheme=s; c.pontConfigured=true; save(); renderStep(); };
+window.setPts = (i,v)=>{ const c=active(); c.ptsTable[i]=v===''?0:Math.max(0,Math.round(v)); c.pontConfigured=true; save(); updateWizChecks(); };
+window.setName = v=>{ active().name=v||'Sem nome'; save(); updateWizChecks(); };
+window.setDate = (which,v)=>{ const c=active(); if(which==='start')c.dateStart=v; else c.dateEnd=v; save(); };
+window.setStatus = v=>{ active().status=v; save(); };
+window.setLoc = (k,v)=>{ const c=active(); (c.loc||(c.loc={}))[k]=v; save(); };
+window.buscaCep = async ()=>{
+  const c=active(); const L=c.loc||(c.loc={}); const cep=(L.cep||'').replace(/\D/g,'');
+  if(cep.length!==8) return;
+  try{
+    const r=await fetch('https://viacep.com.br/ws/'+cep+'/json/');
+    const d=await r.json();
+    if(d && !d.erro){
+      L.cidade=d.localidade||L.cidade||'';
+      L.estado=d.uf||L.estado||'';
+      L.logradouro=d.logradouro||L.logradouro||'';
+      L.bairro=d.bairro||L.bairro||'';
+      save(); if(ui.step==='info') renderStep();
+    }
+  }catch(e){ /* offline: preenche manual */ }
+};
+
+el('#champPick').addEventListener('change', e=>{ openChamp(e.target.value); });
+el('#newChampBtn').addEventListener('click', ()=>window.openNewChamp());
+
+window.exportCSV = ()=>{
+  const c=active(); const rows=standings(c);
+  const head=['Pos','Competidor','Total', ...c.events.map(e=>e.name)];
+  const lines=[head.join(';')];
+  rows.forEach((r,i)=>{
+    const cols=[i+1, r.p.name, r.total, ...r.detail.map(d=>d.placement==null?'':d.placement+'º')];
+    lines.push(cols.join(';'));
+  });
+  const blob=new Blob(["\ufeff"+lines.join('\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=(c.name||'campeonato').replace(/[^\w-]+/g,'_')+'.csv'; a.click();
+};
+
+el('#logoutBtn').addEventListener('click', ()=>logout());
+
+/* ============================ login / cadastro ============================ */
+let authMode = 'login';   // 'login' | 'register'
+
+function renderAuth(){
+  const box = el('#authscreen');
+  const isReg = authMode==='register';
+  box.innerHTML = `
+    <div class="auth">
+      <div class="auth-hero">
+        <div class="auth-logo">HAWKS <b>BOX</b><span class="tag">Força · Foco · Performance</span></div>
+        <div>
+          <h1 class="auth-headline">Do primeiro WOD<br>ao <span class="pink">topo do pódio</span>.</h1>
+          <p class="auth-sub">Gerencie seu campeonato com placar ao vivo, dois sistemas de pontuação e tudo salvo na nuvem — do jeito Hawks.</p>
+          <ul class="auth-feats">
+            <li><span class="tick">✓</span> Ranking recalculado em tempo real</li>
+            <li><span class="tick">✓</span> Pontos por colocação ou sistema invertido</li>
+            <li><span class="tick">✓</span> Cada box enxerga só os seus campeonatos</li>
+          </ul>
+        </div>
+        <div style="color:var(--steel);font-size:12px">© Hawks Box</div>
+      </div>
+      <div class="auth-form-wrap">
+        <div class="auth-card">
+          <h2>${isReg?'Cadastre-se':'Entrar'}</h2>
+          <p class="lead">${isReg?'Crie a conta da sua box para gerenciar os campeonatos.':'Bem-vindo de volta. Acesse o painel da sua box.'}</p>
+          <div id="authMsg" class="auth-msg"></div>
+          ${isReg ? `
+            <div class="auth-field"><label>E-mail</label><div class="auth-input"><input id="f_email" type="email" placeholder="voce@email.com" autocomplete="email"></div></div>
+            <div class="auth-field"><label>Confirme seu e-mail</label><div class="auth-input"><input id="f_email2" type="email" placeholder="repita o e-mail"></div></div>
+            <div class="auth-field"><label>Nome da empresa / box</label><div class="auth-input"><input id="f_company" type="text" placeholder="Ex.: Hawks Box"></div></div>
+            <div class="auth-field"><label>Telefone (WhatsApp)</label><div class="auth-input"><input id="f_phone" type="text" placeholder="(00) 00000-0000"></div></div>
+            <div class="auth-field"><label>Documento</label>
+              <div class="doc-row">
+                <select id="f_doctype" class="doc-type"><option>CNPJ</option><option>CPF</option></select>
+                <div class="auth-input" style="flex:1"><input id="f_document" type="text" placeholder="Somente números"></div>
+              </div>
+            </div>
+            <div class="auth-field"><label>Nome de usuário</label><div class="auth-input"><input id="f_username" type="text" placeholder="Como você aparece no sistema"></div></div>
+            <div class="auth-row2">
+              <div class="auth-field"><label>Senha</label><div class="auth-input"><input id="f_pass" type="password" placeholder="••••••" autocomplete="new-password"><button type="button" class="eye" onclick="togglePass('f_pass')">👁</button></div></div>
+              <div class="auth-field"><label>Confirme a senha</label><div class="auth-input"><input id="f_pass2" type="password" placeholder="••••••"><button type="button" class="eye" onclick="togglePass('f_pass2')">👁</button></div></div>
+            </div>
+            <button class="auth-btn" id="authSubmit" onclick="submitAuth()">Cadastrar agora</button>
+          ` : `
+            <div class="auth-field"><label>E-mail</label><div class="auth-input"><input id="f_email" type="email" placeholder="voce@email.com" autocomplete="email"></div></div>
+            <div class="auth-field"><label>Senha</label><div class="auth-input"><input id="f_pass" type="password" placeholder="••••••••" autocomplete="current-password"><button type="button" class="eye" onclick="togglePass('f_pass')">👁</button></div></div>
+            <button class="auth-btn" id="authSubmit" onclick="submitAuth()">Entrar</button>
+          `}
+          <div class="auth-alt">
+            ${isReg?'Já tem cadastro? ':'Ainda não tem cadastro? '}
+            <button class="auth-link" onclick="switchAuth('${isReg?'login':'register'}')">${isReg?'Fazer Login':'Crie uma conta'}</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  const last = el(isReg?'#f_pass2':'#f_pass');
+  if(last) last.addEventListener('keydown', e=>{ if(e.key==='Enter') submitAuth(); });
+}
+window.switchAuth = m => { authMode=m; renderAuth(); };
+window.togglePass = (id) => { const p=el('#'+id); if(p) p.type = p.type==='password'?'text':'password'; };
+function authMsg(text, kind){ const m=el('#authMsg'); if(!m)return; m.textContent=text; m.className='auth-msg '+(kind||''); if(kind==='err'){ const w=el('.auth-form-wrap'); if(w) w.scrollTop=0; } }
+
+window.submitAuth = async () => {
+  const btn=el('#authSubmit'); const isReg=authMode==='register';
+  const val=id=>(el('#'+id)?.value||'').trim();
+  const email=val('f_email'); const password=el('#f_pass')?.value||'';
+  if(isReg){
+    const email2=val('f_email2'), company=val('f_company'), phone=val('f_phone'),
+          document=val('f_document'), documentType=val('f_doctype'), username=val('f_username'),
+          password2=el('#f_pass2')?.value||'';
+    if(!email||!email2){ authMsg('Preencha e confirme o e-mail.','err'); return; }
+    if(email!==email2){ authMsg('Os e-mails não conferem.','err'); return; }
+    if(!company){ authMsg('Informe o nome da empresa/box.','err'); return; }
+    if(!username){ authMsg('Informe o nome de usuário.','err'); return; }
+    if(password.length<6){ authMsg('A senha precisa ter ao menos 6 caracteres.','err'); return; }
+    if(password!==password2){ authMsg('As senhas não conferem.','err'); return; }
+    await sendAuth(btn,'/api/register',{email,email2,companyName:company,phone,document,documentType,username,password,password2},'Cadastrar agora');
+  } else {
+    if(!email||!password){ authMsg('Preencha e-mail e senha.','err'); return; }
+    await sendAuth(btn,'/api/login',{email,password},'Entrar');
+  }
+};
+async function sendAuth(btn,url,body,label){
+  btn.disabled=true; btn.textContent='Aguarde…'; authMsg('','');
+  try{
+    const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok){ authMsg(data.error||'Não foi possível continuar.','err'); btn.disabled=false; btn.textContent=label; return; }
+    setToken(data.token); AUTH.user=data.user; await enterApp();
+  }catch(e){ authMsg('Erro de conexão. Tente de novo.','err'); btn.disabled=false; btn.textContent=label; }
+}
+
+function showAuth(){ el('#appscreen').style.display='none'; el('#authscreen').style.display='block'; renderAuth(); }
+async function enterApp(){
+  el('#authscreen').style.display='none';
+  el('#appscreen').style.display='block';
+  const u=AUTH.user||{}; const chip=el('#userchip');
+  document.body.classList.toggle('admin', u.role==='admin');
+  if(chip){
+    if(u.role==='admin') chip.innerHTML='<b>Admin</b> · todas as boxes';
+    else chip.innerHTML = (u.name?('Olá, <b>'+esc(u.name.split(' ')[0])+'</b>'):'') + (u.boxName?(' · '+esc(u.boxName)):'');
+  }
+  await load(); render();
+}
+function logout(){ setToken(null); AUTH.user=null; state={champs:[],activeId:null}; ui.view='dashboard'; document.body.classList.remove('admin'); el('#userchip').innerHTML=''; showAuth(); }
+
+/* ============================ boot ============================ */
+(async function(){
+  AUTH.token = getToken();
+  if(!AUTH.token){ showAuth(); return; }
+  try{
+    const res = await fetch('/api/me',{headers:{Authorization:'Bearer '+AUTH.token}});
+    if(res.ok){ const d=await res.json(); AUTH.user=d.user; await enterApp(); }
+    else showAuth();
+  }catch(e){ showAuth(); }
+})();
+</script>
