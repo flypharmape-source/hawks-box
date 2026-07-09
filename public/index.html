@@ -266,6 +266,20 @@
   .sub-blue{color:var(--arc-hi);font-weight:700;font-size:14px;margin-bottom:4px}
   .cat-tag{font-size:12px;font-weight:700;background:var(--arc-soft);color:var(--arc-hi);border-radius:20px;padding:3px 11px}
   .cat-size{font-family:'JetBrains Mono';font-size:13px;color:var(--steel)}
+  /* WODs */
+  .wod-item{border:1px solid var(--line);border-radius:11px;margin-bottom:9px;background:var(--raised)}
+  .wod-row{display:flex;align-items:center;gap:11px;padding:11px 13px}
+  .wod-ord{font-family:'JetBrains Mono';font-weight:700;color:var(--arc-hi);width:22px;text-align:center;flex:0 0 auto}
+  .wod-main{flex:1;min-width:0}
+  .wod-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wod-meta{font-size:12px;color:var(--steel);font-family:'JetBrains Mono';margin-top:2px}
+  .wod-arrows{display:flex;flex-direction:column;gap:2px;flex:0 0 auto}
+  .wod-arrows button{background:none;border:1px solid var(--line);color:var(--steel);border-radius:5px;cursor:pointer;font-size:9px;line-height:1;padding:2px 5px}
+  .wod-arrows button:hover:not(:disabled){color:var(--chalk);border-color:#3a4680}
+  .wod-arrows button:disabled{opacity:.3;cursor:default}
+  .wod-exp{background:none;border:1px solid var(--line);color:var(--chalk);border-radius:7px;cursor:pointer;padding:5px 9px;font-size:12px;flex:0 0 auto}
+  .wod-desc{padding:0 14px 14px 47px;color:var(--chalk);font-size:14px;line-height:1.55;white-space:pre-wrap}
+  .wod-textarea{width:100%;min-height:120px;background:var(--raised);border:1px solid var(--line);color:var(--chalk);border-radius:11px;padding:12px 14px;font-family:inherit;font-size:14px;line-height:1.5;resize:vertical}
   .badge{display:inline-block;font-size:12px;font-weight:700;padding:4px 11px;border-radius:20px}
   .st-draft{background:rgba(141,149,192,.16);color:var(--steel)}
   .st-live{background:var(--arc-soft);color:var(--arc-hi)}
@@ -721,20 +735,69 @@ function tabAtletas(c, body){
         <button class="btn danger sm" onclick="act_delP('${p.id}')">Remover</button></div>`).join('') || '<div class="hint">Nenhum competidor cadastrado ainda.</div>'}</div>
     </div>`;
 }
-/* ---- PROVAS ---- */
+/* ---- PROVAS (WODs) ---- */
+const RESULT_TYPES = { tempo:'Tempo', reps:'Repetições', carga:'Carga (kg)', amrap:'AMRAP (rounds+reps)', pontos:'Pontos' };
 function tabProvas(c, body){
   body.innerHTML = `
     <div class="card">
-      <h2>Provas (WODs) <span class="count">${c.events.length}</span></h2>
-      <div class="row" style="margin-bottom:16px">
-        <input type="text" id="newE" placeholder="Ex.: WOD 1 — Fran, AMRAP 12min..." onkeydown="if(event.key==='Enter')act_addE()">
-        <button class="btn primary" onclick="act_addE()">Adicionar</button>
-      </div>
-      <div id="eList">${c.events.map((e,i)=>`
-        <div class="item"><span class="idx">${String(i+1).padStart(2,'0')}</span><span class="nm">${esc(e.name)}</span>
-        <button class="btn danger sm" onclick="act_delE('${e.id}')">Remover</button></div>`).join('') || '<div class="hint">Nenhuma prova cadastrada ainda.</div>'}</div>
+      <h2 style="justify-content:space-between">Provas (WODs) <span class="count">${c.events.length}</span>
+        <button class="btn primary sm" style="margin-left:auto" onclick="openWod(null)">+ Criar WOD</button>
+      </h2>
+      <div class="hint" style="margin-bottom:16px">A ordem dos WODs abaixo é a ordem que aparece no placar e no lançamento de resultados. Use as setas ▲▼ para reordenar. Clique em ▸ para ver a descrição da prova.</div>
+      ${c.events.length ? c.events.map((e,i)=>{
+        const open = ui.wodOpen===e.id;
+        return `<div class="wod-item">
+          <div class="wod-row">
+            <span class="wod-ord">${i+1}</span>
+            <div class="wod-main">
+              <div class="wod-name">${esc(e.name)}</div>
+              <div class="wod-meta">${RESULT_TYPES[e.resultType]||'Tempo'}${e.date?' · '+fmtDate(e.date):''}</div>
+            </div>
+            <span class="wod-arrows">
+              <button ${i===0?'disabled':''} onclick="moveWod('${e.id}',-1)" title="Subir">▲</button>
+              <button ${i===c.events.length-1?'disabled':''} onclick="moveWod('${e.id}',1)" title="Descer">▼</button>
+            </span>
+            <button class="btn sm" onclick="openWod('${e.id}')">✎ Editar</button>
+            <button class="btn danger sm" onclick="act_delE('${e.id}')">Remover</button>
+            <button class="wod-exp" onclick="toggleWod('${e.id}')">${open?'▲':'▸'}</button>
+          </div>
+          ${open?`<div class="wod-desc">${e.desc?esc(e.desc).replace(/\n/g,'<br>'):'<span class="hint">Sem descrição. Clique em “Editar” para adicionar a descrição da prova.</span>'}</div>`:''}
+        </div>`;
+      }).join('') : '<div class="hint">Nenhum WOD cadastrado ainda. Clique em “+ Criar WOD”.</div>'}
     </div>`;
 }
+window.toggleWod = id => { ui.wodOpen = ui.wodOpen===id?null:id; renderStep(); };
+window.moveWod = (id,dir)=>{ const c=active(); const i=c.events.findIndex(e=>e.id===id); const j=i+dir; if(j<0||j>=c.events.length)return; const t=c.events[i]; c.events[i]=c.events[j]; c.events[j]=t; save(); renderStep(); };
+window.openWod = (id)=>{
+  const c=active(); const e = id ? c.events.find(x=>x.id===id) : null;
+  const opts = Object.entries(RESULT_TYPES).map(([k,v])=>`<option value="${k}" ${e&&e.resultType===k?'selected':''}>${v}</option>`).join('');
+  let m = el('#modal'); if(!m){ m=document.createElement('div'); m.id='modal'; document.body.appendChild(m); }
+  m.innerHTML = `
+    <div class="modal-back" onclick="closeModal(event)">
+      <div class="modal-card" onclick="event.stopPropagation()" style="max-width:560px">
+        <h3>${e?'Editar WOD':'Criar WOD'}</h3>
+        <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:14px">
+          <div style="flex:2;min-width:200px"><label class="fld">Título do WOD</label><input type="text" id="wod_name" value="${e?esc(e.name):''}" placeholder="Ex.: Agacha que passa Pt1"></div>
+          <div style="flex:1;min-width:150px"><label class="fld">Tipo de resultado</label><select id="wod_type" class="champ-pick" style="width:100%">${opts}</select></div>
+        </div>
+        <div style="margin-bottom:14px"><label class="fld">Data</label><input type="date" id="wod_date" value="${e?(e.date||''):''}" style="max-width:200px"></div>
+        <label class="fld">Descrição da prova</label>
+        <textarea id="wod_desc" class="wod-textarea" placeholder="Ex.: 4 Rounds For time&#10;400m run&#10;Max de Air Squat&#10;1 corre, enquanto 1 agacha.">${e?esc(e.desc||''):''}</textarea>
+        <div class="row" style="gap:10px;justify-content:flex-end;margin-top:18px">
+          <button class="btn ghost" onclick="closeModal()">Cancelar</button>
+          <button class="btn primary" onclick="saveWod('${id||''}')">${e?'Salvar alterações':'Criar WOD'}</button>
+        </div>
+      </div>
+    </div>`;
+  setTimeout(()=>el('#wod_name')?.focus(),50);
+};
+window.saveWod = (id)=>{
+  const c=active(); const name=(el('#wod_name')?.value||'').trim(); if(!name){ el('#wod_name')?.focus(); return; }
+  const data={ name, resultType:el('#wod_type')?.value||'tempo', date:el('#wod_date')?.value||'', desc:(el('#wod_desc')?.value||'').trim() };
+  if(id){ const e=c.events.find(x=>x.id===id); if(e) Object.assign(e,data); }
+  else { c.events.push(Object.assign({id:uid()},data)); }
+  save(); closeModal(); renderStep();
+};
 /* ---- INFORMAÇÕES BÁSICAS ---- */
 function tabInfo(c, body){
   const L = c.loc || (c.loc={cep:'',cidade:'',estado:'',logradouro:'',numero:'',complemento:'',bairro:''});
