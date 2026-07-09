@@ -200,7 +200,9 @@
   .dash-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:20px}
   .dash-title{font-family:'Anton';font-weight:400;font-size:24px;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:10px}
   .dash-title .cal{font-size:20px}
-  .dash-table{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .dash-table{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:visible}
+  .dash-row:first-child{border-radius:14px 14px 0 0}
+  .dash-row:last-child{border-radius:0 0 14px 14px}
   .dash-row{display:grid;grid-template-columns:2fr 1.4fr 1fr 44px;align-items:center;gap:14px;padding:15px 18px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s}
   .dash-row:last-child{border-bottom:none}
   .dash-row:not(.dash-th):hover{background:var(--raised)}
@@ -510,7 +512,7 @@ function renderDashboard(app){
       </div>
       ${list.map(c=>{
         const s = STATUS[c.status]||STATUS.rascunho;
-        return `<div class="dash-row" onclick="openControl('${c.id}')">
+        return `<div class="dash-row" onclick="event.stopPropagation();toggleMenu('${c.id}')">
           <div class="dc-name">${esc(c.name)}</div>
           <div class="dc-date">${dateRange(c)}</div>
           <div><span class="badge ${s.cls}">${s.label}</span></div>
