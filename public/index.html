@@ -209,9 +209,29 @@
   .dc-name{font-weight:700;font-size:15.5px}
   .dc-date{font-family:'JetBrains Mono';font-size:13px;color:var(--steel)}
   .dc-box{font-size:13px;color:var(--steel)}
-  .dc-act{text-align:right}
+  .dc-act{text-align:right;position:relative}
+  .kebab{background:none;border:none;cursor:pointer;font-size:20px;line-height:1;color:var(--steel);padding:2px 8px;border-radius:7px}
+  .kebab:hover{background:var(--raised);color:var(--chalk)}
+  .rowmenu{position:absolute;right:0;top:34px;z-index:20;background:var(--raised);border:1px solid var(--line);border-radius:11px;padding:6px;min-width:210px;box-shadow:0 12px 34px rgba(0,0,0,.45);text-align:left}
+  .rowmenu button{display:flex;align-items:center;gap:11px;width:100%;background:none;border:none;color:var(--chalk);font-family:inherit;font-size:14px;font-weight:600;padding:10px 12px;border-radius:8px;cursor:pointer;text-align:left}
+  .rowmenu button:hover{background:var(--panel)}
+  .rowmenu button span{width:18px;text-align:center;opacity:.85}
+  .rowmenu button.danger{color:var(--danger)}
+  .rowmenu button.danger:hover{background:rgba(255,90,122,.1)}
   .rowdel{background:none;border:none;cursor:pointer;font-size:15px;opacity:.55;padding:4px}
-  .rowdel:hover{opacity:1}
+
+  /* ---------- wizard de edição ---------- */
+  .crumb{font-family:'Archivo';font-size:13px;color:var(--steel);font-weight:500;letter-spacing:0;text-transform:none}
+  .wizard{display:grid;grid-template-columns:250px 1fr;gap:22px;align-items:start}
+  .wiz-nav{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .wiz-group{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--steel);font-weight:700;padding:6px 10px 10px}
+  .wiz-step{display:flex;align-items:center;gap:11px;width:100%;background:none;border:none;color:var(--steel);font-family:inherit;font-size:14px;font-weight:600;padding:11px 10px;border-radius:9px;cursor:pointer;text-align:left;margin-bottom:2px}
+  .wiz-step:hover{background:var(--raised);color:var(--chalk)}
+  .wiz-step.on{background:var(--arc-soft);color:var(--chalk)}
+  .wiz-check{width:20px;height:20px;flex:0 0 auto;border-radius:50%;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
+  .wiz-check.done{background:var(--ok);border-color:var(--ok)}
+  .wiz-body{min-width:0}
+  @media(max-width:760px){.wizard{grid-template-columns:1fr}}
   .badge{display:inline-block;font-size:12px;font-weight:700;padding:4px 11px;border-radius:20px}
   .st-draft{background:rgba(141,149,192,.16);color:var(--steel)}
   .st-live{background:var(--arc-soft);color:var(--arc-hi)}
@@ -425,22 +445,54 @@ function renderTopbar(){
 function render(){
   renderTopbar();
   const app = el('#app');
-  if(ui.view!=='manage' || !active()){ renderDashboard(app); return; }
+  if((ui.view!=='manage' && ui.view!=='edit') || !active()){ renderDashboard(app); return; }
   const c = active();
+  const boxTag = AUTH.user&&AUTH.user.role==='admin'&&c._boxName?`<span class="mini-box">${esc(c._boxName)}</span>`:'';
+  if(ui.view==='edit'){
+    const steps = [['info','Informações básicas'],['atletas','Atletas / Equipes'],['provas','Provas (WODs)'],['pontuacao','Pontuação']];
+    app.innerHTML = `
+      <div class="manage-head">
+        <button class="btn sm ghost" onclick="backToList()">← Campeonatos</button>
+        <div class="manage-title">🏆 ${esc(c.name)} ${boxTag} <span class="crumb">· editar</span></div>
+      </div>
+      <div class="wizard">
+        <div class="wiz-nav">
+          <div class="wiz-group">Configuração</div>
+          ${steps.map(([id,label])=>`<button class="wiz-step ${ui.step===id?'on':''}" onclick="setStep('${id}')"><span class="wiz-check ${stepDone(c,id)?'done':''}">${stepDone(c,id)?'✓':''}</span>${label}</button>`).join('')}
+          <button class="btn primary" style="margin-top:16px;width:100%" onclick="openControl('${c.id}')">Ir para o Painel ▸</button>
+        </div>
+        <div class="wiz-body" id="tabbody"></div>
+      </div>`;
+    renderStep();
+    return;
+  }
+  // painel de controle (rodar o evento)
   app.innerHTML = `
     <div class="manage-head">
       <button class="btn sm ghost" onclick="backToList()">← Meus campeonatos</button>
-      <div class="manage-title">${esc(c.name)} ${AUTH.user&&AUTH.user.role==='admin'&&c._boxName?`<span class="mini-box">${esc(c._boxName)}</span>`:''}</div>
+      <div class="manage-title">${esc(c.name)} ${boxTag}</div>
+      <span class="topbar-spacer"></span>
+      <button class="btn sm" onclick="openEdit('${c.id}')">✎ Editar campeonato</button>
     </div>
     <div class="tabs">
       ${tab('placar','Placar')}
       ${tab('resultados','Lançar resultados')}
-      ${tab('atletas','Atletas / Equipes')}
-      ${tab('provas','Provas (WODs)')}
-      ${tab('ajustes','Ajustes')}
     </div>
     <div id="tabbody"></div>`;
   renderTab();
+}
+function stepDone(c,id){
+  if(id==='info') return !!(c.name && c.name!=='Novo campeonato');
+  if(id==='atletas') return c.participants.length>0;
+  if(id==='provas') return c.events.length>0;
+  if(id==='pontuacao') return true;
+  return false;
+}
+window.setStep = id => { ui.step=id; renderStep(); };
+function renderStep(){
+  document.querySelectorAll('.wiz-step').forEach(t=>t.classList.remove('on'));
+  const c = active(); const body = el('#tabbody'); if(!body) return;
+  ({info:tabInfo, atletas:tabAtletas, provas:tabProvas, pontuacao:tabPontuacao}[ui.step]||tabInfo)(c, body);
 }
 
 function renderDashboard(app){
@@ -458,12 +510,20 @@ function renderDashboard(app){
       </div>
       ${list.map(c=>{
         const s = STATUS[c.status]||STATUS.rascunho;
-        return `<div class="dash-row" onclick="openChamp('${c.id}')">
+        return `<div class="dash-row" onclick="openControl('${c.id}')">
           <div class="dc-name">${esc(c.name)}</div>
           <div class="dc-date">${dateRange(c)}</div>
           <div><span class="badge ${s.cls}">${s.label}</span></div>
           ${admin?`<div class="dc-box">${esc(c._boxName||'—')}</div>`:''}
-          <div class="dc-act"><button class="rowdel" title="Excluir" onclick="event.stopPropagation();delChampFromList('${c.id}')">🗑</button></div>
+          <div class="dc-act">
+            <button class="kebab" title="Opções" onclick="event.stopPropagation();toggleMenu('${c.id}')">⋮</button>
+            ${ui.menuOpen===c.id ? `
+            <div class="rowmenu" onclick="event.stopPropagation()">
+              <button onclick="openEdit('${c.id}')"><span>✎</span> Editar</button>
+              <button onclick="openControl('${c.id}')"><span>▦</span> Painel de Controle</button>
+              <button class="danger" onclick="delChampFromList('${c.id}')"><span>🗑</span> Remover</button>
+            </div>` : ''}
+          </div>
         </div>`;
       }).join('')}
     </div>` : `
@@ -473,14 +533,19 @@ function renderDashboard(app){
       <button class="btn primary" onclick="openNewChamp()">+ Novo Campeonato</button>
     </div>`}`;
 }
-window.openChamp = id => { setActive(id); ui.view='manage'; ui.tab='placar'; render(); };
+window.openControl = id => { ui.menuOpen=null; setActive(id); ui.view='manage'; ui.tab='placar'; render(); };
+window.openEdit = id => { ui.menuOpen=null; setActive(id); ui.view='edit'; ui.step='info'; render(); };
+window.openChamp = id => window.openControl(id);
+window.toggleMenu = id => { ui.menuOpen = ui.menuOpen===id ? null : id; renderDashboard(el('#app')); };
+document.addEventListener('click', ()=>{ if(ui.menuOpen){ ui.menuOpen=null; if(ui.view==='dashboard') renderDashboard(el('#app')); } });
 window.backToList = () => { ui.view='dashboard'; render(); };
 window.delChampFromList = id => {
   const c = state.champs.find(x=>x.id===id); if(!c) return;
-  if(!confirm('Excluir "'+c.name+'" e todos os resultados?')) return;
+  ui.menuOpen=null;
+  if(!confirm('Excluir "'+c.name+'" e todos os resultados?')) { render(); return; }
   delChampApi(id); state.champs=state.champs.filter(x=>x.id!==id);
   if(state.activeId===id) setActive(state.champs[0]?.id||null);
-  render();
+  ui.view='dashboard'; render();
 };
 function tab(id,label){ return `<button class="tab ${ui.tab===id?'active':''}" onclick="setTab('${id}')">${label}</button>`; }
 window.setTab = id => { ui.tab=id; renderTab(); };
@@ -488,7 +553,7 @@ window.setTab = id => { ui.tab=id; renderTab(); };
 function renderTab(){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   const c = active(); const body = el('#tabbody'); if(!body) return;
-  ({placar:tabPlacar, resultados:tabResultados, atletas:tabAtletas, provas:tabProvas, ajustes:tabAjustes}[ui.tab])(c, body);
+  ({placar:tabPlacar, resultados:tabResultados}[ui.tab]||tabPlacar)(c, body);
 }
 
 /* ---- PLACAR ---- */
@@ -500,7 +565,7 @@ function renderLeaderboard(){
   const c = active(); const box = el('#leaderboard'); if(!box) return;
   const golf = c.mode==='golf';
   if(!c.participants.length){
-    box.innerHTML = `<div class="empty"><div class="big">Sem atletas</div><p>Cadastre atletas ou equipes na aba “Atletas / Equipes” para ver o placar.</p><button class="btn primary" onclick="setTab('atletas')">Cadastrar atletas</button></div>`;
+    box.innerHTML = `<div class="empty"><div class="big">Sem atletas</div><p>Cadastre atletas ou equipes na edição do campeonato para ver o placar.</p><button class="btn primary" onclick="goEdit('atletas')">Cadastrar atletas</button></div>`;
     return;
   }
   const rows = standings(c);
@@ -602,25 +667,12 @@ function tabProvas(c, body){
         <button class="btn danger sm" onclick="act_delE('${e.id}')">Remover</button></div>`).join('') || '<div class="hint">Nenhuma prova cadastrada ainda.</div>'}</div>
     </div>`;
 }
-/* ---- AJUSTES ---- */
-function tabAjustes(c, body){
+/* ---- INFORMAÇÕES BÁSICAS ---- */
+function tabInfo(c, body){
   body.innerHTML = `
-    <div class="modebox">
-      <label class="fld">Sistema de pontuação</label>
-      <div class="seg">
-        <button class="${c.mode==='points'?'on':''}" onclick="setMode('points')">Pontos por colocação · mais vence</button>
-        <button class="${c.mode==='golf'?'on golf':''}" onclick="setMode('golf')">Invertido (golfe) · menos vence</button>
-      </div>
-      <div class="mode-explain">
-        ${c.mode==='points'
-          ? `<span class="arrow">+</span><span>Cada colocação vale uma quantidade de pontos (1º lugar = mais pontos). Somam-se todas as provas e <b>vence quem tiver mais pontos</b>.</span>`
-          : `<span class="arrow">−</span><span>A colocação vira a própria pontuação (1º lugar = 1 ponto, 2º = 2...). Somam-se todas as provas e <b>vence quem tiver menos pontos</b>.</span>`}
-      </div>
-    </div>
-    ${c.mode==='points' ? ptsConfig(c) : ''}
     <div class="card">
-      <h2>Campeonato</h2>
-      <label class="fld">Nome</label>
+      <h2>Informações básicas</h2>
+      <label class="fld">Nome do campeonato</label>
       <div class="row" style="margin-bottom:16px">
         <input type="text" id="champName" value="${esc(c.name)}" oninput="setName(this.value)">
       </div>
@@ -629,14 +681,35 @@ function tabAjustes(c, body){
         <div style="flex:1"><label class="fld">Data de término</label><input type="date" value="${c.dateEnd||''}" oninput="setDate('end',this.value)"></div>
       </div>
       <label class="fld">Status</label>
-      <select class="champ-pick" style="width:100%;margin-bottom:18px" onchange="setStatus(this.value)">
+      <select class="champ-pick" style="width:100%;margin-bottom:8px" onchange="setStatus(this.value)">
         <option value="rascunho" ${c.status==='rascunho'?'selected':''}>Rascunho</option>
         <option value="andamento" ${c.status==='andamento'?'selected':''}>Em andamento</option>
         <option value="finalizado" ${c.status==='finalizado'?'selected':''}>Finalizado</option>
       </select>
-      <div class="hint" style="margin-bottom:14px">Desempate: maior nº de vitórias de prova, depois melhor colocação individual. Em ambos os sistemas, um <b>empate de colocação</b> na mesma prova dá a mesma pontuação aos envolvidos.</div>
+    </div>
+    <div class="card">
+      <h2>Zona de perigo</h2>
+      <div class="hint" style="margin-bottom:14px">Excluir remove o campeonato e todos os resultados. Não dá pra desfazer.</div>
       <button class="btn danger" onclick="act_delChamp()">Excluir este campeonato</button>
     </div>`;
+}
+/* ---- PONTUAÇÃO ---- */
+function tabPontuacao(c, body){
+  body.innerHTML = `
+    <div class="modebox">
+      <label class="fld">Modelo de pontuação — qual equipe fica em 1º?</label>
+      <div class="seg">
+        <button class="${c.mode==='points'?'on':''}" onclick="setMode('points')">↑ Mais pontos</button>
+        <button class="${c.mode==='golf'?'on golf':''}" onclick="setMode('golf')">↓ Menos pontos</button>
+      </div>
+      <div class="mode-explain">
+        ${c.mode==='points'
+          ? `<span class="arrow">+</span><span>Cada colocação vale uma quantidade de pontos (1º lugar = mais pontos). Somam-se todas as provas e <b>vence quem tiver mais pontos</b>.</span>`
+          : `<span class="arrow">−</span><span>A colocação vira a própria pontuação (1º lugar = 1 ponto, 2º = 2...). Somam-se todas as provas e <b>vence quem tiver menos pontos</b>.</span>`}
+      </div>
+      <div class="mode-explain"><span class="arrow">≡</span><span><b>Critério de desempate:</b> atleta mais bem colocado (maior nº de vitórias de prova, depois a melhor colocação individual).</span></div>
+    </div>
+    ${c.mode==='points' ? ptsConfig(c) : ''}`;
 }
 function ptsConfig(c){
   return `<div class="card">
@@ -654,9 +727,10 @@ function ptsConfig(c){
   </div>`;
 }
 
-function emptyMsg(big,txt,tab,btn){
-  return `<div class="empty"><div class="big">${big}</div><p>${txt}</p><button class="btn primary" onclick="setTab('${tab}')">${btn}</button></div>`;
+function emptyMsg(big,txt,step,btn){
+  return `<div class="empty"><div class="big">${big}</div><p>${txt}</p><button class="btn primary" onclick="goEdit('${step}')">${btn}</button></div>`;
 }
+window.goEdit = step => { if(!active())return; ui.view='edit'; ui.step=step; render(); };
 
 /* ============================ ações ============================ */
 function refreshAll(){ save(); render(); }
