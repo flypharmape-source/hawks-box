@@ -718,10 +718,13 @@ window.openBateria=(id)=>{
 };
 function renderBatModal(){
   const c=active(); const isInt=batDraft.tipo==='intervalo';
+  // equipes já escaladas em OUTRA bateria do MESMO wod
+  const usedInWod=new Set();
+  (c.baterias||[]).forEach(b=>{ if(b.id!==batDraft.id && batDraft.wodId && b.wodId===batDraft.wodId) (b.teamIds||[]).forEach(id=>usedInWod.add(id)); });
   const wodOpts=`<option value="">Selecione</option>`+(c.events||[]).map(e=>`<option value="${e.id}" ${batDraft.wodId===e.id?'selected':''}>${esc(e.name)}</option>`).join('');
   const catOpts=`<option value="">Todas / selecione</option>`+(c.categories||[]).map(x=>`<option value="${x.id}" ${batDraft.catId===x.id?'selected':''}>${esc(x.name)}</option>`).join('');
-  const avail=(c.participants||[]).filter(p=>(!batDraft.catId||p.catId===batDraft.catId)&&!batDraft.teamIds.includes(p.id));
-  const teamOpts=`<option value="">${batDraft.catId?'Selecione uma equipe':'Selecione uma categoria primeiro'}</option>`+avail.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  const avail=(c.participants||[]).filter(p=>(!batDraft.catId||p.catId===batDraft.catId)&&!batDraft.teamIds.includes(p.id)&&!usedInWod.has(p.id));
+  const teamOpts=`<option value="">${batDraft.wodId?(batDraft.catId?'Selecione uma equipe':'Selecione uma categoria primeiro'):'Selecione o WOD primeiro'}</option>`+avail.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
   const added=batDraft.teamIds.map(id=>(c.participants||[]).find(p=>p.id===id)).filter(Boolean);
   let m=el('#modal'); if(!m){ m=document.createElement('div'); m.id='modal'; document.body.appendChild(m); }
   m.innerHTML=`
@@ -746,6 +749,7 @@ function renderBatModal(){
           </div>
         </div>
         <div class="mod-sec"><div class="sub-blue">Equipes</div>
+          <div class="hint" style="margin-top:6px">Equipes já escaladas em outra bateria deste WOD não aparecem na lista.</div>
           <div class="row" style="gap:10px;margin-top:8px;margin-bottom:12px">
             <select id="bt_team" class="champ-pick" style="flex:1">${teamOpts}</select>
             <button class="btn" onclick="addBatTeam()">+ Adicionar</button>
@@ -765,6 +769,12 @@ window.addBatTeam=()=>{ const v=el('#bt_team')?.value; if(v&&!batDraft.teamIds.i
 window.rmBatTeam=(id)=>{ batDraft.teamIds=batDraft.teamIds.filter(x=>x!==id); renderBatModal(); };
 window.saveBateria=()=>{
   const c=active(); if(!batDraft.inicio){ alert('Informe o horário de início.'); el('#bt_ini')?.focus(); return; }
+  if(batDraft.tipo!=='intervalo' && batDraft.wodId){
+    const usados=new Set();
+    (c.baterias||[]).forEach(b=>{ if(b.id!==batDraft.id && b.wodId===batDraft.wodId) (b.teamIds||[]).forEach(id=>usados.add(id)); });
+    const conflito=batDraft.teamIds.filter(id=>usados.has(id)).map(id=>((c.participants||[]).find(p=>p.id===id)||{}).name).filter(Boolean);
+    if(conflito.length){ alert('Estas equipes já estão em outra bateria deste WOD: '+conflito.join(', ')); return; }
+  }
   const data={ tipo:batDraft.tipo, titulo:(batDraft.titulo||'').trim(), inicio:batDraft.inicio, duracao:Number(batDraft.duracao)||0, wodId:batDraft.wodId||'', catId:batDraft.catId||'', teamIds:batDraft.tipo==='intervalo'?[]:batDraft.teamIds };
   if(!c.baterias) c.baterias=[];
   if(batDraft.id){ const b=c.baterias.find(x=>x.id===batDraft.id); if(b) Object.assign(b,data); }
