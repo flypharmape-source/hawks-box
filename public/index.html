@@ -527,6 +527,7 @@ async function load(){
 let _saveTimer=null;
 function save(){
   const c = active(); if(!c) return;
+  if(c.statusAuto!==false) c.status = computeAutoStatus(c);
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(()=>putChamp(c), 400);   // agrupa edições rápidas (ex.: digitar colocações)
   setSync('saving');
@@ -549,7 +550,7 @@ function setSync(s){
 function newChamp(name, opts){
   opts = opts||{};
   const c = { id:uid(), name:name||'Novo campeonato', mode:'points',
-    dateStart:opts.dateStart||'', dateEnd:opts.dateEnd||'', status:opts.status||'rascunho',
+    dateStart:opts.dateStart||'', dateEnd:opts.dateEnd||'', status:opts.status||'rascunho', statusAuto:true,
     categories:[], loc:{cep:'',cidade:'',estado:'',logradouro:'',numero:'',complemento:'',bairro:''},
     ptsScheme:'auto', ptsTable:[100,94,88,82,76,70,64,60,56,52,48,44,40,36,32,28,24,20,16,12],
     ptsMax:100, faixas:[{do:1,ao:10,diff:5}], tiebreakCrit:'melhor',
@@ -557,6 +558,19 @@ function newChamp(name, opts){
   state.champs.push(c); state.activeId=c.id; return c;
 }
 const STATUS = { rascunho:{label:'Rascunho',cls:'st-draft'}, andamento:{label:'Em andamento',cls:'st-live'}, finalizado:{label:'Finalizado',cls:'st-done'} };
+function computeAutoStatus(c){
+  const cats=c.categories||[]; const catList=cats.length?cats.map(x=>x.id):[''];
+  let total=0, filled=0;
+  catList.forEach(catId=>{
+    const teams = catId ? (c.participants||[]).filter(p=>p.catId===catId) : (c.participants||[]);
+    const events = (c.events||[]).filter(ev=> !catId || (((ev.catDetails||{})[catId]||{}).ativa!==false));
+    teams.forEach(t=> events.forEach(ev=>{ total++; const v=(c.results&&c.results[ev.id]||{})[t.id]; if(v!==undefined&&v!==null&&String(v).trim()!=='') filled++; }));
+  });
+  if(total===0||filled===0) return 'rascunho';
+  if(filled>=total) return 'finalizado';
+  return 'andamento';
+}
+function statusOf(c){ return (c.statusAuto!==false) ? computeAutoStatus(c) : (c.status||'rascunho'); }
 function fmtDate(iso){ if(!iso) return ''; const p=iso.split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : iso; }
 function dateRange(c){ const a=fmtDate(c.dateStart), b=fmtDate(c.dateEnd); if(a&&b) return a+' – '+b; return a||b||'—'; }
 
@@ -753,8 +767,9 @@ function panelBaterias(c, body){
   body.innerHTML = `
     <div class="card">
       <h2 style="justify-content:space-between">Baterias <span class="count">${bats.length}</span>
-        <span style="margin-left:auto;display:flex;gap:8px">
+        <span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn primary sm" onclick="openBateria(null)">+ Criar evento</button>
+          <button class="btn sm" onclick="generateSumulas()">📄 Gerar Súmulas</button>
           ${bats.length?'<button class="btn danger sm" onclick="delAllBat()">Apagar todos</button>':''}
         </span>
       </h2>
@@ -782,6 +797,86 @@ function panelBaterias(c, body){
 window.toggleBat = id=>{ ui.batOpen=ui.batOpen===id?null:id; renderPanel(); };
 window.delBat = id=>{ const c=active(); c.baterias=(c.baterias||[]).filter(b=>b.id!==id); save(); renderPanel(); };
 window.delAllBat = ()=>{ if(!confirm('Apagar todas as baterias?'))return; active().baterias=[]; save(); renderPanel(); };
+
+function sumulaCSS(){ return `
+  *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111}
+  body{padding:0}
+  .sheet{page-break-after:always;padding:18px 22px}
+  .box{border:1px solid #222}
+  .b-top{display:flex}
+  .b-logo{width:150px;border-right:1px solid #222;display:flex;align-items:center;justify-content:center;color:#999;font-size:12px;padding:10px}
+  .b-head{flex:1;padding:10px 14px}
+  .b-champ{font-size:22px;font-weight:bold}
+  .b-wod{font-size:14px;margin-top:2px}
+  .b-team{border-top:1px solid #222;padding:8px 14px;font-size:13px}
+  .b-catrow{display:flex;justify-content:space-between;border-top:1px solid #222;border-bottom:1px solid #222;padding:8px 14px;font-size:12px;background:#fafafa}
+  .b-body{display:flex}
+  .b-desc{width:50%;border-right:1px solid #222;padding:12px 14px;font-size:12px}
+  .b-desc h4{text-align:center;font-size:15px;margin-bottom:8px}
+  .b-desc .txt{white-space:pre-wrap;line-height:1.5}
+  .b-cap{margin-top:14px;padding-top:10px;border-top:1px solid #222;font-size:12px}
+  .b-right{width:50%}
+  .b-jn{border-bottom:1px solid #222;padding:12px 14px;min-height:150px}
+  .b-jn h4,.b-res h4,.b-sig h4{text-align:center;font-size:15px;margin-bottom:14px}
+  .b-res{border-bottom:1px solid #222;padding:12px 14px}
+  .b-sig{padding:12px 14px}
+  .line{font-size:12px;margin-top:14px}
+  .divider{border:none;border-top:1px dashed #999;margin:14px 0}
+  .recibo .b-catrow{justify-content:center;font-weight:bold}
+  .foot{text-align:center;font-size:11px;color:#777;margin-top:12px}
+` }
+function sumulaPage(c, ev, cat, b, t, desc, cap){
+  const champ=esc(c.name); const wod=esc(ev.name); const team=esc(t.name);
+  const catName=esc(cat?cat.name:'—'); const batName=esc(b.titulo||'Bateria');
+  return `<div class="sheet">
+    <div class="box">
+      <div class="b-top">
+        <div class="b-logo">HAWKS BOX</div>
+        <div class="b-head"><div class="b-champ">${champ}</div><div class="b-wod">${wod}</div>
+          <div class="b-team" style="border:none;padding:8px 0 0">Equipe: <b>${team}</b></div></div>
+      </div>
+      <div class="b-catrow"><span>Categoria: ${catName}</span><span>Bateria: ${batName}</span></div>
+      <div class="b-body">
+        <div class="b-desc"><h4>Descrição do WOD</h4><div class="txt">${desc?esc(desc):'—'}</div>
+          <div class="b-cap">Timecap: ${cap?esc(cap):'—'}</div></div>
+        <div class="b-right">
+          <div class="b-jn"><h4>Judge Notes</h4></div>
+          <div class="b-res"><h4>Resultado</h4><div class="line">Resultado: _______________________________________</div></div>
+          <div class="b-sig"><h4>Assinatura</h4><div class="line">Judge: __________________________________________</div><div class="line">Atleta: __________________________________________</div></div>
+        </div>
+      </div>
+    </div>
+    <hr class="divider">
+    <div class="box recibo">
+      <div class="b-top"><div class="b-logo">HAWKS BOX</div>
+        <div class="b-head"><div class="b-champ">${champ}</div><div class="b-wod">${wod}</div>
+          <div class="b-team" style="border:none;padding:8px 0 0">Equipe: <b>${team}</b></div></div></div>
+      <div class="b-catrow">Recibo do atleta</div>
+      <div style="display:flex;padding:14px">
+        <div style="flex:1" class="line">Judge: _______________________________</div>
+        <div style="flex:1" class="line">Resultado: _______________________________</div>
+      </div>
+    </div>
+    <div class="foot">Hawks Box · Força · Foco · Performance</div>
+  </div>`;
+}
+window.generateSumulas = ()=>{
+  const c=active();
+  const bats=(c.baterias||[]).filter(b=>b.tipo!=='intervalo'&&b.wodId).slice().sort((a,b)=>(a.inicio||'').localeCompare(b.inicio||''));
+  if(!bats.length){ alert('Cadastre baterias com WOD e equipes para gerar as súmulas.'); return; }
+  let pages='';
+  bats.forEach(b=>{
+    const ev=(c.events||[]).find(e=>e.id===b.wodId); if(!ev) return;
+    const cat=(c.categories||[]).find(x=>x.id===b.catId);
+    const d=(ev.catDetails||{})[b.catId]||{};
+    (b.teamIds||[]).forEach(tid=>{ const t=(c.participants||[]).find(p=>p.id===tid); if(t) pages+=sumulaPage(c,ev,cat,b,t,d.desc||'',d.timeCap||''); });
+  });
+  if(!pages){ alert('Nenhuma equipe nas baterias.'); return; }
+  const w=window.open('','_blank');
+  if(!w){ alert('Permita pop-ups para gerar as súmulas.'); return; }
+  w.document.write(`<html><head><meta charset="utf-8"><title>Súmulas - ${esc(c.name)}</title><style>${sumulaCSS()}</style></head><body>${pages}</body></html>`);
+  w.document.close(); setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 400);
+};
 
 let batDraft=null;
 window.openBateria=(id)=>{
@@ -856,7 +951,7 @@ window.saveBateria=()=>{
 };
 function panelDashboard(c, body){
   const cats=c.categories||[]; const local=[c.loc?.cidade,c.loc?.estado].filter(Boolean).join(' / ');
-  const s=STATUS[c.status]||STATUS.rascunho;
+  const s=STATUS[statusOf(c)]||STATUS.rascunho;
   body.innerHTML = `
     <div class="dash-hero">
       <div>
@@ -932,7 +1027,7 @@ function renderDashboard(app){
         <div>Campeonato</div><div>Data</div><div>Status</div>${admin?'<div>Box</div>':''}<div></div>
       </div>
       ${list.map(c=>{
-        const s = STATUS[c.status]||STATUS.rascunho;
+        const s = STATUS[statusOf(c)]||STATUS.rascunho;
         return `<div class="dash-row" onclick="event.stopPropagation();toggleMenu('${c.id}')">
           <div class="dc-name">${esc(c.name)}</div>
           <div class="dc-date">${dateRange(c)}</div>
@@ -1369,12 +1464,18 @@ function tabInfo(c, body){
         <div style="flex:1;min-width:130px"><label class="fld">Data de início</label><input type="date" value="${c.dateStart||''}" oninput="setDate('start',this.value)"></div>
         <div style="flex:1;min-width:130px"><label class="fld">Data de término</label><input type="date" value="${c.dateEnd||''}" oninput="setDate('end',this.value)"></div>
       </div>
-      <label class="fld" style="margin-top:8px">Status</label>
-      <select class="champ-pick" style="width:100%;max-width:240px" onchange="setStatus(this.value)">
-        <option value="rascunho" ${c.status==='rascunho'?'selected':''}>Rascunho</option>
-        <option value="andamento" ${c.status==='andamento'?'selected':''}>Em andamento</option>
-        <option value="finalizado" ${c.status==='finalizado'?'selected':''}>Finalizado</option>
-      </select>
+      <div class="row" style="justify-content:space-between;align-items:center;margin-top:8px">
+        <label class="fld" style="margin:0">Status ${c.statusAuto!==false?'<span class="soon" style="margin-left:6px">automático</span>':''}</label>
+        <button type="button" class="ldr-btn ${c.statusAuto!==false?'on':''}" onclick="toggleStatusAuto()">${c.statusAuto!==false?'⚡ Automático':'✎ Manual'}</button>
+      </div>
+      ${c.statusAuto!==false
+        ? `<div style="margin-top:8px"><span class="badge ${(STATUS[statusOf(c)]||STATUS.rascunho).cls}">${(STATUS[statusOf(c)]||STATUS.rascunho).label}</span></div>
+           <div class="hint" style="margin-top:8px">Atualiza sozinho: sem resultados = Rascunho; resultados parciais = Em andamento; todos os resultados preenchidos = Finalizado.</div>`
+        : `<select class="champ-pick" style="width:100%;max-width:240px;margin-top:6px" onchange="setStatus(this.value)">
+             <option value="rascunho" ${c.status==='rascunho'?'selected':''}>Rascunho</option>
+             <option value="andamento" ${c.status==='andamento'?'selected':''}>Em andamento</option>
+             <option value="finalizado" ${c.status==='finalizado'?'selected':''}>Finalizado</option>
+           </select>`}
     </div>
     <div class="card">
       <h2>Onde o campeonato irá ocorrer?</h2>
@@ -1604,6 +1705,7 @@ window.setPts = (i,v)=>{ const c=active(); c.ptsTable[i]=v===''?0:Math.max(0,Mat
 window.setName = v=>{ active().name=v||'Sem nome'; save(); updateWizChecks(); };
 window.setDate = (which,v)=>{ const c=active(); if(which==='start')c.dateStart=v; else c.dateEnd=v; save(); };
 window.setStatus = v=>{ active().status=v; save(); };
+window.toggleStatusAuto = ()=>{ const c=active(); c.statusAuto = !(c.statusAuto!==false); if(c.statusAuto) c.status=computeAutoStatus(c); save(); renderStep(); };
 window.setLoc = (k,v)=>{ const c=active(); (c.loc||(c.loc={}))[k]=v; save(); };
 window.buscaCep = async ()=>{
   const c=active(); const L=c.loc||(c.loc={}); const cep=(L.cep||'').replace(/\D/g,'');
