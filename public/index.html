@@ -326,6 +326,9 @@
   .pnav{background:none;border:none;color:var(--steel);font-family:inherit;font-size:14px;font-weight:600;text-align:left;padding:11px 12px;border-radius:9px;cursor:pointer}
   .pnav:hover{background:var(--raised);color:var(--chalk)}
   .pnav.on{background:var(--arc-soft);color:var(--chalk)}
+  .pparent{display:flex;align-items:center;justify-content:space-between}
+  .pchev{font-size:11px;color:var(--steel)}
+  .psub{padding-left:26px;font-size:13.5px;font-weight:600}
   .panel-body{min-width:0}
   .dash-hero{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:16px}
   .dh-name{font-family:'Anton';font-size:22px;text-transform:uppercase;letter-spacing:.5px}
@@ -598,7 +601,8 @@ function render(){
     return;
   }
   // painel de controle (dashboard do evento)
-  const nav = [['dashboard','▦ Dashboard'],['participantes','👥 Participantes'],['baterias','🗓 Baterias'],['resultados','📝 Resultados'],['leaderboard','🏆 Leaderboard']];
+  const partActive = (ui.mtab==='equipes'||ui.mtab==='kits');
+  const partOpen = ui.partOpen || partActive;
   app.innerHTML = `
     <div class="manage-head">
       <button class="btn sm ghost" onclick="backToList()">← Meus campeonatos</button>
@@ -608,18 +612,42 @@ function render(){
     </div>
     <div class="panel">
       <div class="panel-nav">
-        ${nav.map(([id,label])=>`<button class="pnav ${ui.mtab===id?'on':''}" onclick="setMtab('${id}')">${label}</button>`).join('')}
+        <button class="pnav ${ui.mtab==='dashboard'?'on':''}" onclick="setMtab('dashboard')">▦ Dashboard</button>
+        <button class="pnav pparent ${partActive?'on':''}" onclick="togglePart()">👥 Participantes <span class="pchev">${partOpen?'▾':'▸'}</span></button>
+        ${partOpen?`
+          <button class="pnav psub ${ui.mtab==='equipes'?'on':''}" onclick="setMtab('equipes')">👥 Equipes</button>
+          <button class="pnav psub ${ui.mtab==='kits'?'on':''}" onclick="setMtab('kits')">🛍 Entrega de Kits</button>
+        `:''}
+        <button class="pnav ${ui.mtab==='baterias'?'on':''}" onclick="setMtab('baterias')">🗓 Baterias</button>
+        <button class="pnav ${ui.mtab==='resultados'?'on':''}" onclick="setMtab('resultados')">📝 Resultados</button>
+        <button class="pnav ${ui.mtab==='leaderboard'?'on':''}" onclick="setMtab('leaderboard')">🏆 Leaderboard</button>
       </div>
       <div class="panel-body" id="tabbody"></div>
     </div>`;
   renderPanel();
 }
-window.setMtab = id => { ui.mtab=id; renderPanel(); };
+window.togglePart = ()=>{ ui.partOpen=!(ui.partOpen||ui.mtab==='equipes'||ui.mtab==='kits'); if(ui.partOpen && ui.mtab!=='kits') ui.mtab='equipes'; render(); };
+window.setMtab = id => { ui.mtab=id; render(); };
 function renderPanel(){
-  document.querySelectorAll('.pnav').forEach(b=>b.classList.toggle('on', b.getAttribute('onclick').includes("'"+ui.mtab+"'")));
   const c=active(); const body=el('#tabbody'); if(!body) return;
-  ({dashboard:panelDashboard, participantes:tabAtletas, baterias:panelBaterias, resultados:tabResultados, leaderboard:tabPlacar}[ui.mtab]||panelDashboard)(c, body);
+  ({dashboard:panelDashboard, equipes:tabAtletas, kits:panelKits, baterias:panelBaterias, resultados:tabResultados, leaderboard:tabPlacar}[ui.mtab]||panelDashboard)(c, body);
 }
+function panelKits(c, body){
+  const kits=c.kits||(c.kits={}); const total=c.participants.length; const done=c.participants.filter(p=>kits[p.id]).length;
+  body.innerHTML = `
+    <div class="card">
+      <h2>Entrega de Kits <span class="count">${done}/${total}</span></h2>
+      <div class="hint" style="margin-bottom:16px">Marque quem já retirou o kit do evento (camiseta, brindes, etc.).</div>
+      ${total ? c.participants.map(p=>{
+        const on=!!kits[p.id];
+        return `<div class="wodcat" style="cursor:pointer" onclick="toggleKit('${p.id}')">
+          <div class="wodcat-info"><b>${esc(p.name)}</b> ${on?'<span class="cat-tag" style="background:rgba(54,194,107,.16);color:#5fd88c">entregue</span>':''}</div>
+          <button type="button" class="tgl ${on?'on':''}"><span></span></button>
+        </div>`;
+      }).join('') : '<div class="hint">Cadastre atletas/equipes primeiro (em Equipes).</div>'}
+    </div>`;
+}
+window.toggleKit = id=>{ const c=active(); if(!c.kits)c.kits={}; c.kits[id]=!c.kits[id]; save(); renderPanel(); };
 function panelBaterias(c, body){ body.innerHTML = `<div class="card"><h2>Baterias <span class="soon">Em breve</span></h2><div class="empty"><div style="font-size:40px;margin-bottom:10px">🗓</div><div class="big">Em breve</div><p>Organize os atletas em baterias (heats) por WOD e horário. Estamos preparando essa parte.</p></div></div>`; }
 function panelDashboard(c, body){
   const cats=c.categories||[]; const local=[c.loc?.cidade,c.loc?.estado].filter(Boolean).join(' / ');
