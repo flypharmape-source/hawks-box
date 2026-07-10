@@ -363,6 +363,15 @@
   .res-toggle{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:4px;gap:4px;margin-bottom:16px}
   .rt{background:none;border:none;color:var(--steel);font-family:inherit;font-size:14px;font-weight:700;padding:9px 18px;border-radius:8px;cursor:pointer}
   .rt.on{background:linear-gradient(135deg,var(--arc-hi),var(--arc));color:#fff}
+  .res-scroll{overflow-x:auto}
+  .res-grid{border-collapse:collapse;width:100%;min-width:480px}
+  .res-grid th,.res-grid td{border-bottom:1px solid var(--line);padding:10px 10px;text-align:center}
+  .res-grid th{font-size:12px;color:var(--steel);font-weight:700;vertical-align:bottom}
+  .res-grid .rg-type{font-size:10px;color:var(--arc-hi);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+  .res-grid .rg-team{text-align:left;font-weight:700;white-space:nowrap;position:sticky;left:0;background:var(--panel)}
+  .res-grid thead .rg-team{color:var(--steel);font-weight:700}
+  .rg-in{width:80px;background:var(--raised);border:1px solid var(--line);color:var(--chalk);border-radius:8px;padding:8px;font-family:'JetBrains Mono';text-align:center;font-weight:700;font-size:13px}
+  .rg-in:focus{border-color:var(--arc);outline:none}
   .mini-box{font-family:'Archivo';font-size:11px;letter-spacing:1px;color:var(--arc-hi);border:1px solid var(--line);border-radius:6px;padding:2px 8px;vertical-align:middle;margin-left:6px}
 
   /* ---------- modal ---------- */
@@ -527,27 +536,51 @@ function faixaTable(c){
   }
   return t;
 }
-function eventPoints(champ, placement){
-  // placement: inteiro >=1, ou null (sem resultado / DNF)
-  const n = champ.participants.length;
-  if(champ.mode==='golf'){
-    return placement==null ? n : placement;            // menos vence; em branco = última colocação
-  }
-  // modo pontos (mais vence)
+function eventPoints(champ, placement, n){
+  n = n||champ.participants.length;
+  if(champ.mode==='golf') return placement==null ? n : placement;
   if(placement==null) return 0;
   if(champ.ptsScheme==='auto') return Math.max(0, n - placement + 1);
   if(champ.ptsScheme==='faixas'){ const t=faixaTable(champ); return t[placement]!=null?t[placement]:1; }
   const t = champ.ptsTable;
-  return t[placement-1] != null ? t[placement-1] : 1;   // tabela personalizada
+  return t[placement-1] != null ? t[placement-1] : 1;
 }
-function standings(champ){
+// tipo de resultado de um WOD para uma categoria
+function wodTypeFor(ev, catId){ const d=(ev.catDetails||{})[catId]; return (d&&d.resultType)||ev.resultType||'tempo'; }
+// menor vence (tempo) ou maior vence (reps/carga/amrap/pontos)
+function betterAsc(type){ return type==='tempo'; }
+// converte o valor bruto digitado em número comparável
+function parseResult(type, raw){
+  if(raw==null || String(raw).trim()==='') return null;
+  raw=String(raw).trim();
+  if(type==='tempo'){
+    if(/^\d{1,3}:\d{1,2}$/.test(raw)){ const [m,s]=raw.split(':').map(Number); return m*60+s; }
+    const n=parseFloat(raw.replace(',','.')); return isNaN(n)?null:n;
+  }
+  const n=parseFloat(raw.replace(',','.')); return isNaN(n)?null:n;
+}
+// colocações de um WOD entre um conjunto de equipes (a partir do bruto)
+function computePlacements(champ, ev, teams, catId){
+  const type=wodTypeFor(ev, catId);
+  const scored=teams.map(t=>({id:t.id, v:parseResult(type,(champ.results[ev.id]||{})[t.id])})).filter(x=>x.v!=null);
+  scored.sort((a,b)=> betterAsc(type)? a.v-b.v : b.v-a.v);
+  const place={};
+  scored.forEach((x,i)=>{ place[x.id]=(i>0 && x.v===scored[i-1].v)? place[scored[i-1].id] : i+1; });
+  return place;
+}
+function standings(champ, catId){
+  const cats=champ.categories||[];
+  catId = (catId!==undefined) ? catId : (cats[0]?cats[0].id:'');
+  const teams = catId ? (champ.participants||[]).filter(p=>p.catId===catId) : (champ.participants||[]);
+  const n = teams.length;
+  const events = (champ.events||[]).filter(ev=> !catId || (((ev.catDetails||{})[catId]||{}).ativa!==false));
   const tbWod = (champ.tiebreakCrit||'').startsWith('wod:') ? champ.tiebreakCrit.slice(4) : null;
-  const rows = champ.participants.map(p=>{
+  const placeByEv={}; events.forEach(ev=>{ placeByEv[ev.id]=computePlacements(champ, ev, teams, catId); });
+  const rows = teams.map(p=>{
     let total=0, wins=0, best=Infinity, tbPlace=Infinity;
-    const detail = champ.events.map(ev=>{
-      const pl = (champ.results[ev.id]||{})[p.id];
-      const placement = (pl===''||pl==null||isNaN(pl)) ? null : Math.round(pl);
-      const pts = eventPoints(champ, placement);
+    const detail = events.map(ev=>{
+      const placement = placeByEv[ev.id][p.id]!=null ? placeByEv[ev.id][p.id] : null;
+      const pts = eventPoints(champ, placement, n);
       total += pts;
       if(placement===1) wins++;
       if(placement!=null && placement<best) best=placement;
@@ -559,9 +592,9 @@ function standings(champ){
   rows.sort((a,b)=>{
     if(champ.mode==='golf'){ if(a.total!==b.total) return a.total-b.total; }
     else { if(a.total!==b.total) return b.total-a.total; }
-    if(tbWod && a.tbPlace!==b.tbPlace) return a.tbPlace-b.tbPlace;   // desempate por WOD escolhido
-    if(a.wins!==b.wins) return b.wins-a.wins;            // mais vitórias desempata
-    if(a.best!==b.best) return a.best-b.best;            // melhor colocação individual
+    if(tbWod && a.tbPlace!==b.tbPlace) return a.tbPlace-b.tbPlace;
+    if(a.wins!==b.wins) return b.wins-a.wins;
+    if(a.best!==b.best) return a.best-b.best;
     return a.p.name.localeCompare(b.p.name);
   });
   return rows;
@@ -916,27 +949,31 @@ function tabPlacar(c, body){
 }
 function renderLeaderboard(){
   const c = active(); const box = el('#leaderboard'); if(!box) return;
-  const golf = c.mode==='golf';
+  const golf = c.mode==='golf'; const cats=c.categories||[];
   if(!c.participants.length){
     box.innerHTML = `<div class="empty"><div class="big">Sem atletas</div><p>Cadastre atletas ou equipes na edição do campeonato para ver o placar.</p><button class="btn primary" onclick="goEdit('atletas')">Cadastrar atletas</button></div>`;
     return;
   }
-  const rows = standings(c);
+  if(cats.length && (!ui.lbCat || !cats.find(x=>x.id===ui.lbCat))) ui.lbCat=cats[0].id;
+  const catId = cats.length?ui.lbCat:'';
+  const rows = standings(c, catId);
   const ruleTxt = golf ? 'MENOS PONTOS VENCE' : 'MAIS PONTOS VENCE';
   const dir = golf ? '▲ menor' : '▼ maior';
+  const catSel = cats.length ? `<select class="champ-pick" onchange="setLbCat(this.value)">${cats.map(x=>`<option value="${x.id}" ${x.id===catId?'selected':''}>${esc(x.name)}</option>`).join('')}</select>` : '';
   box.innerHTML = `
     <div class="board-head">
       <div class="board-title">${esc(c.name)}</div>
-      <div class="board-rule ${golf?'golf':''}">${ruleTxt} · <span class="dir">${dir}</span></div>
+      <div class="row" style="gap:10px;align-items:center">${catSel}<div class="board-rule ${golf?'golf':''}">${ruleTxt} · <span class="dir">${dir}</span></div></div>
     </div>
-    <div class="hint" style="margin-bottom:6px">${c.events.length} prova(s) · ${c.participants.length} competidor(es) · toque numa linha para ver a quebra por prova</div>
-    ${rows.map((r,i)=>lbRow(c,r,i,golf)).join('')}
+    <div class="hint" style="margin-bottom:6px">${rows.length} competidor(es)${catId?' · categoria selecionada':''} · toque numa linha para ver a quebra por prova</div>
+    ${rows.length?rows.map((r,i)=>lbRow(c,r,i,golf)).join(''):'<div class="hint">Nenhuma equipe nesta categoria.</div>'}
     <div class="row no-print" style="margin-top:18px;gap:9px">
       <button class="btn sm" onclick="syncFromServer()">Sincronizar</button>
       <button class="btn sm" onclick="exportCSV()">Exportar CSV</button>
       <button class="btn sm" onclick="window.print()">Imprimir / PDF</button>
     </div>`;
 }
+window.setLbCat = v => { ui.lbCat=v; renderLeaderboard(); };
 function lbRow(c,r,i,golf){
   const pos=i+1; const cls = pos<=3?`p${pos}`:'';
   const open = ui.open[r.p.id];
@@ -970,38 +1007,36 @@ function tabResultados(c, body){
   renderResArea();
 }
 window.setResView = v => { ui.resView=v; renderPanel(); };
+const RESULT_SHORT = { tempo:'Tempo', reps:'Rep', carga:'Carga', amrap:'AMRAP', pontos:'Pts' };
+function resCategory(c){ const cats=c.categories||[]; if(!cats.length) return ''; if(!ui.resCat || !cats.find(x=>x.id===ui.resCat)) ui.resCat=cats[0].id; return ui.resCat; }
+window.setResCat = v => { ui.resCat=v; renderPanel(); };
 function renderResArea(){
   const c=active(); const area=el('#resArea'); if(!area) return;
+  const cats=c.categories||[]; const catId=resCategory(c);
   if((ui.resView||'resultado')==='rank'){ tabPlacar(c, area); return; }
+  const teams = catId ? c.participants.filter(p=>p.catId===catId) : c.participants;
+  const events = (c.events||[]).filter(ev=> !catId || (((ev.catDetails||{})[catId]||{}).ativa!==false));
+  const catSel = cats.length ? `<select class="champ-pick" onchange="setResCat(this.value)">${cats.map(x=>`<option value="${x.id}" ${x.id===catId?'selected':''}>${esc(x.name)} · ${esc(x.type)} · 👥${x.size}</option>`).join('')}</select>` : '';
   area.innerHTML = `
     <div class="card">
-      <h2>Lançar colocações</h2>
-      <div class="ev-pick">${c.events.map(e=>`<button class="ev-chip ${e.id===ui.resEvent?'on':''}" onclick="pickEvent('${e.id}')">${esc(e.name)}</button>`).join('')}</div>
-      <div class="hint" style="margin-bottom:12px">Digite a <b>colocação</b> de cada competidor nesta prova (1 = primeiro). Deixe em branco para ausência/DNF. A pontuação é calculada automaticamente conforme o sistema escolhido.</div>
-      <div id="resList"></div>
+      <h2 style="justify-content:space-between">Lançar resultados ${catSel?`<span style="margin-left:auto">${catSel}</span>`:''}</h2>
+      <div class="hint" style="margin-bottom:12px">Digite o <b>resultado bruto</b> de cada equipe em cada WOD (tempo em <b>mm:ss</b>, ou o número de reps/carga). A colocação e os pontos são calculados automaticamente: tempo = menor vence; reps/carga = maior vence.</div>
+      ${!events.length ? '<div class="hint">Nenhum WOD ativo para esta categoria.</div>' :
+        !teams.length ? '<div class="hint">Nenhuma equipe nesta categoria. Cadastre em Participantes → Equipes.</div>' :
+      `<div class="res-scroll"><table class="res-grid">
+        <thead><tr><th class="rg-team">Equipe</th>${events.map(ev=>`<th>${esc(ev.name)}<div class="rg-type">${RESULT_SHORT[wodTypeFor(ev,catId)]||'Tempo'}</div></th>`).join('')}</tr></thead>
+        <tbody>${teams.map(t=>`<tr>
+          <td class="rg-team">${esc(t.name)}</td>
+          ${events.map(ev=>{ const type=wodTypeFor(ev,catId); const val=(c.results[ev.id]||{})[t.id]||'';
+            return `<td><input type="text" class="rg-in" value="${esc(val)}" placeholder="${type==='tempo'?'mm:ss':'—'}" oninput="setResult('${ev.id}','${t.id}',this.value)"></td>`;
+          }).join('')}
+        </tr>`).join('')}</tbody>
+      </table></div>`}
     </div>`;
-  renderResList();
 }
-window.pickEvent = id => { ui.resEvent=id; renderResArea(); };
-function renderResList(){
-  const c = active(); const box = el('#resList'); if(!box) return;
-  const ev = c.events.find(e=>e.id===ui.resEvent);
-  const res = c.results[ev.id] || (c.results[ev.id]={});
-  box.innerHTML = c.participants.map(p=>{
-    const v = res[p.id]; const placement=(v===''||v==null||isNaN(v))?null:Math.round(v);
-    const pts = eventPoints(c, placement);
-    return `<div class="res-row">
-      <div><div class="athlete">${esc(p.name)}</div><div class="live" id="live-${p.id}">${placement==null?'sem resultado':'vale '+pts+' pts'}</div></div>
-      <input type="number" min="1" step="1" value="${v??''}" placeholder="—" aria-label="Colocação de ${esc(p.name)}" oninput="setResult('${p.id}', this.value)">
-    </div>`;
-  }).join('');
-}
-window.setResult = (pid, val) => {
-  const c = active(); const ev = ui.resEvent;
-  if(!c.results[ev]) c.results[ev]={};
-  c.results[ev][pid] = val===''? '' : val;
-  const placement=(val===''||val==null||isNaN(val))?null:Math.round(val);
-  const live = el('#live-'+pid); if(live) live.textContent = placement==null?'sem resultado':'vale '+eventPoints(c,placement)+' pts';
+window.setResult = (evId, pid, val) => {
+  const c = active(); if(!c.results[evId]) c.results[evId]={};
+  c.results[evId][pid] = (val==='')? '' : val;
   save();
 };
 
@@ -1514,16 +1549,19 @@ el('#champPick').addEventListener('change', e=>{ openChamp(e.target.value); });
 el('#newChampBtn').addEventListener('click', ()=>window.openNewChamp());
 
 window.exportCSV = ()=>{
-  const c=active(); const rows=standings(c);
-  const head=['Pos','Competidor','Total', ...c.events.map(e=>e.name)];
+  const c=active(); const cats=c.categories||[]; const catId=cats.length?ui.lbCat:'';
+  const rows=standings(c, catId);
+  const events=(c.events||[]).filter(ev=> !catId || (((ev.catDetails||{})[catId]||{}).ativa!==false));
+  const head=['Pos','Competidor','Total', ...events.map(e=>e.name)];
   const lines=[head.join(';')];
   rows.forEach((r,i)=>{
     const cols=[i+1, r.p.name, r.total, ...r.detail.map(d=>d.placement==null?'':d.placement+'º')];
     lines.push(cols.join(';'));
   });
+  const catName=(cats.find(x=>x.id===catId)||{}).name||'';
   const blob=new Blob(["\ufeff"+lines.join('\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download=(c.name||'campeonato').replace(/[^\w-]+/g,'_')+'.csv'; a.click();
+  a.download=((c.name||'campeonato')+(catName?'_'+catName:'')).replace(/[^\w-]+/g,'_')+'.csv'; a.click();
 };
 
 el('#logoutBtn').addEventListener('click', ()=>logout());
