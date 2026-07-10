@@ -319,6 +319,22 @@
   /* ---------- cabeçalho da gestão ---------- */
   .manage-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px}
   .manage-title{font-family:'Anton';font-weight:400;font-size:22px;text-transform:uppercase;letter-spacing:.5px}
+  .panel{display:grid;grid-template-columns:210px 1fr;gap:22px;align-items:start}
+  @media(max-width:760px){.panel{grid-template-columns:1fr}}
+  .panel-nav{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:3px}
+  @media(max-width:760px){.panel-nav{flex-direction:row;flex-wrap:wrap}}
+  .pnav{background:none;border:none;color:var(--steel);font-family:inherit;font-size:14px;font-weight:600;text-align:left;padding:11px 12px;border-radius:9px;cursor:pointer}
+  .pnav:hover{background:var(--raised);color:var(--chalk)}
+  .pnav.on{background:var(--arc-soft);color:var(--chalk)}
+  .panel-body{min-width:0}
+  .dash-hero{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:16px}
+  .dh-name{font-family:'Anton';font-size:22px;text-transform:uppercase;letter-spacing:.5px}
+  .dh-meta{font-family:'JetBrains Mono';font-size:13px;color:var(--steel);margin-top:6px}
+  .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+  @media(max-width:520px){.stat-row{grid-template-columns:1fr}}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;text-align:center}
+  .stat-n{font-family:'JetBrains Mono';font-weight:700;font-size:34px;color:var(--arc-hi);line-height:1}
+  .stat-l{font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:var(--steel);margin-top:6px}
   .mini-box{font-family:'Archivo';font-size:11px;letter-spacing:1px;color:var(--arc-hi);border:1px solid var(--line);border-radius:6px;padding:2px 8px;vertical-align:middle;margin-left:6px}
 
   /* ---------- modal ---------- */
@@ -408,7 +424,7 @@
 const ACTKEY = 'hawksbox:active';   // lembra qual campeonato estava aberto neste navegador
 const TOKKEY = 'hawksbox:token';
 let state = { champs: [], activeId: null };
-let ui = { view: 'dashboard', tab: 'placar', resEvent: null, open: {} };
+let ui = { view: 'dashboard', tab: 'placar', mtab: 'dashboard', resEvent: null, open: {} };
 let AUTH = { token: null, user: null };
 
 function getToken(){ try{ return localStorage.getItem(TOKKEY)||''; }catch(e){ return ''; } }
@@ -581,7 +597,8 @@ function render(){
     renderStep();
     return;
   }
-  // painel de controle (rodar o evento)
+  // painel de controle (dashboard do evento)
+  const nav = [['dashboard','▦ Dashboard'],['participantes','👥 Participantes'],['baterias','🗓 Baterias'],['resultados','📝 Resultados'],['leaderboard','🏆 Leaderboard']];
   app.innerHTML = `
     <div class="manage-head">
       <button class="btn sm ghost" onclick="backToList()">← Meus campeonatos</button>
@@ -589,12 +606,46 @@ function render(){
       <span class="topbar-spacer"></span>
       <button class="btn sm" onclick="openEdit('${c.id}')">✎ Editar campeonato</button>
     </div>
-    <div class="tabs">
-      ${tab('placar','Placar')}
-      ${tab('resultados','Lançar resultados')}
+    <div class="panel">
+      <div class="panel-nav">
+        ${nav.map(([id,label])=>`<button class="pnav ${ui.mtab===id?'on':''}" onclick="setMtab('${id}')">${label}</button>`).join('')}
+      </div>
+      <div class="panel-body" id="tabbody"></div>
+    </div>`;
+  renderPanel();
+}
+window.setMtab = id => { ui.mtab=id; renderPanel(); };
+function renderPanel(){
+  document.querySelectorAll('.pnav').forEach(b=>b.classList.toggle('on', b.getAttribute('onclick').includes("'"+ui.mtab+"'")));
+  const c=active(); const body=el('#tabbody'); if(!body) return;
+  ({dashboard:panelDashboard, participantes:tabAtletas, baterias:panelBaterias, resultados:tabResultados, leaderboard:tabPlacar}[ui.mtab]||panelDashboard)(c, body);
+}
+function panelBaterias(c, body){ body.innerHTML = `<div class="card"><h2>Baterias <span class="soon">Em breve</span></h2><div class="empty"><div style="font-size:40px;margin-bottom:10px">🗓</div><div class="big">Em breve</div><p>Organize os atletas em baterias (heats) por WOD e horário. Estamos preparando essa parte.</p></div></div>`; }
+function panelDashboard(c, body){
+  const cats=c.categories||[]; const local=[c.loc?.cidade,c.loc?.estado].filter(Boolean).join(' / ');
+  const s=STATUS[c.status]||STATUS.rascunho;
+  body.innerHTML = `
+    <div class="dash-hero">
+      <div>
+        <div class="dh-name">${esc(c.name)}</div>
+        <div class="dh-meta">${dateRange(c)}${local?' · '+esc(local):''}</div>
+      </div>
+      <span class="badge ${s.cls}">${s.label}</span>
     </div>
-    <div id="tabbody"></div>`;
-  renderTab();
+    <div class="stat-row">
+      <div class="stat"><div class="stat-n">${cats.length}</div><div class="stat-l">Categorias</div></div>
+      <div class="stat"><div class="stat-n">${c.participants.length}</div><div class="stat-l">Atletas / Equipes</div></div>
+      <div class="stat"><div class="stat-n">${c.events.length}</div><div class="stat-l">WODs</div></div>
+    </div>
+    <div class="card">
+      <h2>Categorias</h2>
+      ${cats.length ? cats.map(ct=>`<div class="item"><span class="nm">${esc(ct.name)}</span><span class="cat-tag">${esc(ct.type)}</span><span class="cat-size">👥 ${ct.size}</span></div>`).join('') : '<div class="hint">Nenhuma categoria cadastrada. Adicione na edição do campeonato.</div>'}
+    </div>
+    <div class="row" style="gap:10px;flex-wrap:wrap">
+      <button class="btn primary" onclick="setMtab('leaderboard')">🏆 Ver Leaderboard</button>
+      <button class="btn" onclick="setMtab('resultados')">📝 Lançar resultados</button>
+      <button class="btn" onclick="openEdit('${c.id}')">✎ Editar campeonato</button>
+    </div>`;
 }
 function stepDone(c,id){
   if(id==='info') return !!(c.name && c.name!=='Novo campeonato');
@@ -672,7 +723,7 @@ function renderDashboard(app){
       <button class="btn primary" onclick="openNewChamp()">+ Novo Campeonato</button>
     </div>`}`;
 }
-window.openControl = id => { ui.menuOpen=null; setActive(id); ui.view='manage'; ui.tab='placar'; render(); };
+window.openControl = id => { ui.menuOpen=null; setActive(id); ui.view='manage'; ui.mtab='dashboard'; render(); };
 window.openEdit = id => { ui.menuOpen=null; setActive(id); ui.view='edit'; ui.step='info'; render(); };
 window.openChamp = id => window.openControl(id);
 window.toggleMenu = id => { ui.menuOpen = ui.menuOpen===id ? null : id; renderDashboard(el('#app')); };
@@ -1168,7 +1219,7 @@ window.createChamp = ()=>{
   setActive(c.id); putChamp(c); closeModal(); ui.view='manage'; ui.tab='placar'; render();
 };
 
-function reBody(focusId){ if(ui.view==='edit') renderStep(); else renderTab(); if(focusId) el('#'+focusId)?.focus(); }
+function reBody(focusId){ if(ui.view==='edit') renderStep(); else if(ui.view==='manage') renderPanel(); else renderTab(); if(focusId) el('#'+focusId)?.focus(); }
 window.act_addP = ()=>{ const i=el('#newP'); const v=i.value.trim(); if(!v)return; active().participants.push({id:uid(),name:v}); save(); reBody('newP'); };
 window.act_delP = id=>{ const c=active(); c.participants=c.participants.filter(p=>p.id!==id); Object.values(c.results).forEach(r=>delete r[id]); save(); reBody(); };
 window.act_addE = ()=>{ const i=el('#newE'); const v=i.value.trim(); if(!v)return; active().events.push({id:uid(),name:v}); save(); reBody('newE'); };
