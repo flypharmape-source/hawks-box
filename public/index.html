@@ -1027,8 +1027,8 @@ function renderResArea(){
         <thead><tr><th class="rg-team">Equipe</th>${events.map(ev=>`<th>${esc(ev.name)}<div class="rg-type">${RESULT_SHORT[wodTypeFor(ev,catId)]||'Tempo'}</div></th>`).join('')}</tr></thead>
         <tbody>${teams.map(t=>`<tr>
           <td class="rg-team">${esc(t.name)}</td>
-          ${events.map(ev=>{ const type=wodTypeFor(ev,catId); const val=(c.results[ev.id]||{})[t.id]||'';
-            return `<td><input type="text" class="rg-in" value="${esc(val)}" placeholder="${type==='tempo'?'mm:ss':'—'}" oninput="setResult('${ev.id}','${t.id}',this.value)"></td>`;
+          ${events.map(ev=>{ const type=wodTypeFor(ev,catId); const val=(c.results[ev.id]||{})[t.id]||''; const isTime=type==='tempo';
+            return `<td><input type="text" class="rg-in" value="${esc(val)}" placeholder="${isTime?'mm:ss':'—'}" inputmode="${isTime?'numeric':'decimal'}" oninput="setResult('${ev.id}','${t.id}',this.value)" ${isTime?`onblur="fmtTime(this,'${ev.id}','${t.id}')"`:''}></td>`;
           }).join('')}
         </tr>`).join('')}</tbody>
       </table></div>`}
@@ -1038,6 +1038,21 @@ window.setResult = (evId, pid, val) => {
   const c = active(); if(!c.results[evId]) c.results[evId]={};
   c.results[evId][pid] = (val==='')? '' : val;
   save();
+};
+window.fmtTime = (inp, evId, pid)=>{
+  let v=(inp.value||'').trim();
+  if(v){
+    if(v.includes(':')){
+      let [m,s]=v.split(':'); m=(m.replace(/\D/g,'')||'0'); s=(s.replace(/\D/g,'')||'0').slice(0,2);
+      inp.value=String(parseInt(m,10)).padStart(2,'0')+':'+s.padStart(2,'0');
+    } else {
+      const d=v.replace(/\D/g,'');
+      if(!d){ inp.value=''; }
+      else if(d.length<=2){ inp.value=d.padStart(2,'0')+':00'; }
+      else { inp.value=String(parseInt(d.slice(0,-2),10)).padStart(2,'0')+':'+d.slice(-2); }
+    }
+  }
+  if(evId) setResult(evId, pid, inp.value);
 };
 
 /* ---- EQUIPES ---- */
