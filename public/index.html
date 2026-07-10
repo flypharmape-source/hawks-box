@@ -386,6 +386,28 @@
   .lb-p1 .lb-pos{color:var(--gold)} .lb-p1 .lb-team{box-shadow:inset 4px 0 0 var(--gold)}
   .lb-p2 .lb-pos{color:var(--silver)} .lb-p2 .lb-team{box-shadow:inset 4px 0 0 var(--silver)}
   .lb-p3 .lb-pos{color:var(--bronze)} .lb-p3 .lb-team{box-shadow:inset 4px 0 0 var(--bronze)}
+  /* filtro de provas (publicação) */
+  .wod-filter{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 12px}
+  .wf{border:1px solid var(--line);background:var(--raised);color:var(--chalk);border-radius:20px;padding:6px 13px;font-size:12.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:7px}
+  .wf::before{content:'●';font-size:9px}
+  .wf.on{border-color:var(--arc);color:var(--arc-hi)}
+  .wf.on::before{color:var(--ok)}
+  .wf.off{opacity:.5}
+  .wf.off::before{color:var(--steel)}
+  /* página pública */
+  #publicscreen{min-height:100vh}
+  .pub-header{padding:26px 22px 22px;background:linear-gradient(160deg,#0A1338,#040B26);border-bottom:1px solid var(--line);text-align:center}
+  .pub-brand .mark{font-family:'Anton';font-size:20px;letter-spacing:1px;text-transform:uppercase}
+  .pub-brand .mark b{background:linear-gradient(180deg,var(--arc-hi),var(--arc));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .pub-title{font-family:'Anton';font-size:30px;text-transform:uppercase;letter-spacing:.5px;margin-top:10px}
+  .pub-meta{font-family:'JetBrains Mono';font-size:13px;color:var(--steel);margin-top:8px}
+  .pub-tabsbar{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;padding-top:20px;margin-bottom:18px}
+  .pub-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}
+  .ptab{background:none;border:none;color:var(--steel);font-weight:700;font-size:15px;padding:11px 16px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .ptab.on{color:var(--chalk);border-bottom-color:var(--arc)}
+  .pub-wod{border:1px solid var(--line);border-radius:12px;padding:15px;margin-bottom:10px;background:var(--raised)}
+  .pub-wod-h{font-weight:700;font-size:15px;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pub-wod-d{color:var(--chalk);font-size:14px;line-height:1.55;white-space:pre-wrap}
   .mini-box{font-family:'Archivo';font-size:11px;letter-spacing:1px;color:var(--arc-hi);border:1px solid var(--line);border-radius:6px;padding:2px 8px;vertical-align:middle;margin-left:6px}
 
   /* ---------- modal ---------- */
@@ -587,7 +609,7 @@ function standings(champ, catId){
   catId = (catId!==undefined) ? catId : (cats[0]?cats[0].id:'');
   const teams = catId ? (champ.participants||[]).filter(p=>p.catId===catId) : (champ.participants||[]);
   const n = teams.length;
-  const events = (champ.events||[]).filter(ev=> !catId || (((ev.catDetails||{})[catId]||{}).ativa!==false));
+  const events = (champ.events||[]).filter(ev=> (!catId || (((ev.catDetails||{})[catId]||{}).ativa!==false)) && !(champ.wodHidden&&champ.wodHidden[ev.id]));
   const tbWod = (champ.tiebreakCrit||'').startsWith('wod:') ? champ.tiebreakCrit.slice(4) : null;
   const placeByEv={}; events.forEach(ev=>{ placeByEv[ev.id]=computePlacements(champ, ev, teams, catId); });
   const rows = teams.map(p=>{
@@ -972,7 +994,8 @@ function renderLeaderboard(){
   if(cats.length && (!ui.lbCat || !cats.find(x=>x.id===ui.lbCat))) ui.lbCat=cats[0].id;
   const catId = cats.length?ui.lbCat:'';
   const rows = standings(c, catId);
-  const events = (c.events||[]).filter(ev=> !catId || (((ev.catDetails||{})[catId]||{}).ativa!==false));
+  const events = (c.events||[]).filter(ev=> (!catId || (((ev.catDetails||{})[catId]||{}).ativa!==false)) && !(c.wodHidden&&c.wodHidden[ev.id]));
+  const allEvents = (c.events||[]).filter(ev=> !catId || (((ev.catDetails||{})[catId]||{}).ativa!==false));
   const ruleTxt = golf ? 'MENOS PONTOS VENCE' : 'MAIS PONTOS VENCE';
   const dir = golf ? '▲ menor' : '▼ maior';
   const catSel = cats.length ? `<select class="champ-pick" onchange="setLbCat(this.value)">${cats.map(x=>`<option value="${x.id}" ${x.id===catId?'selected':''}>${esc(x.name)}</option>`).join('')}</select>` : '';
@@ -981,7 +1004,8 @@ function renderLeaderboard(){
       <div class="board-title">${esc(c.name)}</div>
       <div class="row" style="gap:10px;align-items:center">${catSel}<div class="board-rule ${golf?'golf':''}">${ruleTxt} · <span class="dir">${dir}</span></div></div>
     </div>
-    <div class="hint" style="margin-bottom:10px">${rows.length} competidor(es)${catId?' · categoria selecionada':''}</div>
+    ${allEvents.length?`<div class="wod-filter no-print">${allEvents.map(ev=>`<button class="wf ${(c.wodHidden&&c.wodHidden[ev.id])?'off':'on'}" onclick="toggleWodPub('${ev.id}')">${esc(ev.name)}</button>`).join('')}</div>`:''}
+    <div class="hint" style="margin-bottom:10px">${rows.length} competidor(es)${catId?' · categoria selecionada':''} · use os botões acima para publicar/ocultar cada WOD</div>
     ${rows.length? `<div class="res-scroll"><table class="lb-grid">
       <thead><tr><th class="lb-pos">#</th><th class="lb-team">Equipe</th><th class="lb-total">Total</th>${events.map(ev=>`<th>${esc(ev.name)}<div class="lb-sub">Pts · ${RESULT_SHORT[wodTypeFor(ev,catId)]||'Res'}</div></th>`).join('')}</tr></thead>
       <tbody>${rows.map((r,i)=>`<tr class="${i<3?'lb-p'+(i+1):''}">
@@ -992,12 +1016,25 @@ function renderLeaderboard(){
       </tr>`).join('')}</tbody>
     </table></div>` : '<div class="hint">Nenhuma equipe nesta categoria.</div>'}
     <div class="row no-print" style="margin-top:18px;gap:9px">
+      <button class="btn primary sm" onclick="shareLeaderboard()">🔗 Link público</button>
       <button class="btn sm" onclick="syncFromServer()">Sincronizar</button>
       <button class="btn sm" onclick="exportCSV()">Exportar CSV</button>
       <button class="btn sm" onclick="window.print()">Imprimir / PDF</button>
     </div>`;
 }
 window.setLbCat = v => { ui.lbCat=v; renderLeaderboard(); };
+window.toggleWodPub = id => { const c=active(); if(!c.wodHidden)c.wodHidden={}; c.wodHidden[id]=!c.wodHidden[id]; save(); renderLeaderboard(); };
+window.shareLeaderboard = ()=>{
+  const c=active(); const link=location.origin+'/p/'+c.id;
+  let m=el('#modal'); if(!m){ m=document.createElement('div'); m.id='modal'; document.body.appendChild(m); }
+  m.innerHTML=`<div class="modal-back" onclick="closeModal(event)"><div class="modal-card" onclick="event.stopPropagation()" style="max-width:520px">
+    <h3>Compartilhar leaderboard</h3>
+    <div class="hint" style="margin-bottom:12px">Qualquer pessoa com este link vê o placar, as baterias e os WODs — sem precisar de login (dados pessoais dos atletas não aparecem).</div>
+    <div class="row" style="gap:8px"><input type="text" id="shareLink" readonly value="${link}" style="flex:1"><button class="btn primary" onclick="copyShare()">Copiar</button></div>
+    <div class="row" style="justify-content:flex-end;margin-top:16px"><a class="btn" href="${link}" target="_blank">Abrir página ▸</a></div>
+  </div></div>`;
+};
+window.copyShare = ()=>{ const i=el('#shareLink'); if(!i)return; i.select(); try{ navigator.clipboard.writeText(i.value); }catch(e){ document.execCommand('copy'); } const b=event.target; b.textContent='Copiado ✓'; setTimeout(()=>b.textContent='Copiar',1500); };
 function lbRow(c,r,i,golf){
   const pos=i+1; const cls = pos<=3?`p${pos}`:'';
   const open = ui.open[r.p.id];
@@ -1711,8 +1748,95 @@ async function enterApp(){
 }
 function logout(){ setToken(null); AUTH.user=null; state={champs:[],activeId:null}; ui.view='dashboard'; document.body.classList.remove('admin'); el('#userchip').innerHTML=''; showAuth(); }
 
+/* ============================ página pública ============================ */
+let PUB = { champ:null, tab:'leaderboard', cat:'', team:'' };
+async function renderPublic(id){
+  document.getElementById('authscreen').style.display='none';
+  document.getElementById('appscreen').style.display='none';
+  let host=document.getElementById('publicscreen');
+  if(!host){ host=document.createElement('div'); host.id='publicscreen'; document.body.appendChild(host); }
+  host.innerHTML='<div class="empty"><div class="big">Carregando…</div></div>';
+  try{
+    const res=await fetch('/api/public/'+id);
+    if(!res.ok){ host.innerHTML='<div class="empty"><div class="big">Campeonato não encontrado</div><p>Verifique o link.</p></div>'; return; }
+    PUB.champ=await res.json();
+  }catch(e){ host.innerHTML='<div class="empty"><div class="big">Erro ao carregar</div></div>'; return; }
+  drawPublic();
+}
+function drawPublic(){
+  const c=PUB.champ; const host=document.getElementById('publicscreen');
+  const cats=c.categories||[]; if(cats.length && (!PUB.cat||!cats.find(x=>x.id===PUB.cat))) PUB.cat=cats[0].id;
+  const local=[c.loc&&c.loc.cidade,c.loc&&c.loc.estado].filter(Boolean).join('/');
+  const catSel = cats.length?`<select class="champ-pick" onchange="pubSetCat(this.value)">${cats.map(x=>`<option value="${x.id}" ${x.id===PUB.cat?'selected':''}>${esc(x.name)} · ${esc(x.type)} · 👥${x.size}</option>`).join('')}</select>`:'';
+  host.innerHTML=`
+    <div class="pub-header">
+      <div class="pub-brand"><span class="mark">HAWKS <b>BOX</b></span></div>
+      <div class="pub-title">${esc(c.name)}</div>
+      <div class="pub-meta">📅 ${dateRange(c)}${local?' · 📍 '+esc(local):''}</div>
+    </div>
+    <div class="wrap">
+      <div class="pub-tabsbar">
+        <div class="pub-tabs">
+          <button class="ptab ${PUB.tab==='leaderboard'?'on':''}" onclick="pubSetTab('leaderboard')">Leaderboard</button>
+          <button class="ptab ${PUB.tab==='baterias'?'on':''}" onclick="pubSetTab('baterias')">Baterias</button>
+          <button class="ptab ${PUB.tab==='wods'?'on':''}" onclick="pubSetTab('wods')">WODs</button>
+        </div>
+        <div id="pubFilter">${PUB.tab==='baterias'?pubTeamSel():catSel}</div>
+      </div>
+      <div id="pubBody"></div>
+    </div>`;
+  drawPubBody();
+}
+window.pubSetTab=t=>{ PUB.tab=t; drawPublic(); };
+window.pubSetCat=v=>{ PUB.cat=v; drawPublic(); };
+window.pubSetTeam=v=>{ PUB.team=v; drawPubBody(); };
+function pubTeamSel(){
+  const c=PUB.champ; const teams=c.participants||[];
+  return `<select class="champ-pick" onchange="pubSetTeam(this.value)"><option value="">Todas as equipes</option>${teams.map(t=>`<option value="${t.id}" ${PUB.team===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select>`;
+}
+function drawPubBody(){
+  const c=PUB.champ; const body=document.getElementById('pubBody'); if(!body) return;
+  if(PUB.tab==='leaderboard') pubLeaderboard(c,body);
+  else if(PUB.tab==='baterias') pubBaterias(c,body);
+  else pubWods(c,body);
+}
+function pubLeaderboard(c, body){
+  const cats=c.categories||[]; const catId=cats.length?PUB.cat:'';
+  const rows=standings(c, catId);
+  const events=(c.events||[]).filter(ev=> (!catId||(((ev.catDetails||{})[catId]||{}).ativa!==false)) && !(c.wodHidden&&c.wodHidden[ev.id]));
+  const golf=c.mode==='golf';
+  body.innerHTML = rows.length? `<div class="card"><div class="res-scroll"><table class="lb-grid">
+    <thead><tr><th class="lb-pos">#</th><th class="lb-team">Equipe</th><th class="lb-total">Total</th>${events.map(ev=>`<th>${esc(ev.name)}<div class="lb-sub">Pts · ${RESULT_SHORT[wodTypeFor(ev,catId)]||'Res'}</div></th>`).join('')}</tr></thead>
+    <tbody>${rows.map((r,i)=>`<tr class="${i<3?'lb-p'+(i+1):''}">
+      <td class="lb-pos">${i+1}</td><td class="lb-team">${esc(r.p.name)}</td><td class="lb-total">${r.total}</td>
+      ${r.detail.map(d=>`<td><span class="lb-cellpts">${d.pts}</span><span class="lb-cellraw">${d.raw?esc(d.raw):(d.placement==null?'—':'')}</span></td>`).join('')}
+    </tr>`).join('')}</tbody></table></div></div>` : '<div class="card"><div class="hint">Sem resultados nesta categoria ainda.</div></div>';
+}
+function pubBaterias(c, body){
+  const bats=(c.baterias||[]).slice().filter(b=>!PUB.team || (b.teamIds||[]).includes(PUB.team)).sort((a,b)=>(a.inicio||'').localeCompare(b.inicio||''));
+  body.innerHTML = `<div class="card">${bats.length?bats.map(b=>{
+    const fim=addMin(b.inicio,b.duracao); const wod=(c.events||[]).find(e=>e.id===b.wodId);
+    const teams=(b.teamIds||[]).map(id=>(c.participants||[]).find(p=>p.id===id)).filter(Boolean);
+    return `<div class="bat-item ${b.tipo==='intervalo'?'intervalo':''}"><div class="bat-row" style="cursor:default">
+      <div class="bat-time">${b.inicio||'--:--'}${fim?' – '+fim:''}</div>
+      <div class="bat-main"><div class="bat-title">${esc(b.titulo||(b.tipo==='intervalo'?'Intervalo':'Bateria'))}</div>
+        <div class="bat-meta">${b.tipo==='intervalo'?'Intervalo':((wod?esc(wod.name):'—')+' · '+teams.length+' equipe(s)')}</div></div>
+    </div>${b.tipo!=='intervalo'&&teams.length?`<div class="bat-teams">${teams.map(t=>`<div class="bat-team">${esc(t.name)}</div>`).join('')}</div>`:''}</div>`;
+  }).join(''):'<div class="hint">Nenhuma bateria cadastrada.</div>'}</div>`;
+}
+function pubWods(c, body){
+  const catId=(c.categories||[]).length?PUB.cat:'';
+  const evs=(c.events||[]).filter(ev=> !catId || (((ev.catDetails||{})[catId]||{}).ativa!==false));
+  body.innerHTML = `<div class="card">${evs.length?evs.map(ev=>{
+    const d=(ev.catDetails||{})[catId]||{}; const desc=d.desc||''; const cap=d.timeCap?(' · Time Cap '+d.timeCap):'';
+    return `<div class="pub-wod"><div class="pub-wod-h">${esc(ev.name)} <span class="cat-tag">${RESULT_SHORT[wodTypeFor(ev,catId)]||'Tempo'}${cap}</span></div><div class="pub-wod-d">${desc?esc(desc).replace(/\n/g,'<br>'):'<span class="hint">Sem descrição.</span>'}</div></div>`;
+  }).join(''):'<div class="hint">Nenhum WOD.</div>'}</div>`;
+}
+
 /* ============================ boot ============================ */
 (async function(){
+  const pub=location.pathname.match(/^\/p\/([A-Za-z0-9]+)/);
+  if(pub){ renderPublic(pub[1]); return; }
   AUTH.token = getToken();
   if(!AUTH.token){ showAuth(); return; }
   try{
