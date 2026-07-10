@@ -338,6 +338,17 @@
   .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;text-align:center}
   .stat-n{font-family:'JetBrains Mono';font-weight:700;font-size:34px;color:var(--arc-hi);line-height:1}
   .stat-l{font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:var(--steel);margin-top:6px}
+  /* equipes */
+  .eq-group{margin-bottom:18px}
+  .eq-ghead{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:var(--arc-soft);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:8px}
+  .eq-count{margin-left:auto;font-size:12px;color:var(--steel);font-weight:600}
+  .eq-row{display:flex;align-items:center;gap:12px;padding:11px 13px;background:var(--raised);border:1px solid var(--line);border-radius:10px;margin-bottom:7px}
+  .eq-nm{font-weight:700;min-width:130px;flex:0 0 auto}
+  .eq-members{flex:1;min-width:0;color:var(--steel);font-size:13.5px}
+  .part-card{background:var(--raised);border:1px solid var(--line);border-radius:12px;padding:15px;margin-top:12px}
+  .part-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .ldr-btn{background:var(--line);color:var(--steel);border:none;border-radius:20px;padding:6px 14px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+  .ldr-btn.on{background:linear-gradient(135deg,var(--arc-hi),var(--arc));color:#fff}
   .mini-box{font-family:'Archivo';font-size:11px;letter-spacing:1px;color:var(--arc-hi);border:1px solid var(--line);border-radius:6px;padding:2px 8px;vertical-align:middle;margin-left:6px}
 
   /* ---------- modal ---------- */
@@ -857,20 +868,106 @@ window.setResult = (pid, val) => {
   save();
 };
 
-/* ---- ATLETAS ---- */
+/* ---- EQUIPES ---- */
 function tabAtletas(c, body){
+  const cats=c.categories||[]; const teams=c.participants||[];
+  const groups = cats.map(ct=>({ct, list:teams.filter(t=>t.catId===ct.id)}));
+  const noCat = teams.filter(t=>!t.catId || !cats.find(x=>x.id===t.catId));
   body.innerHTML = `
     <div class="card">
-      <h2>Atletas / Equipes <span class="count">${c.participants.length}</span></h2>
-      <div class="row" style="margin-bottom:16px">
-        <input type="text" id="newP" placeholder="Nome do atleta ou da equipe" onkeydown="if(event.key==='Enter')act_addP()">
-        <button class="btn primary" onclick="act_addP()">Adicionar</button>
-      </div>
-      <div id="pList">${c.participants.map((p,i)=>`
-        <div class="item"><span class="idx">${String(i+1).padStart(2,'0')}</span><span class="nm">${esc(p.name)}</span>
-        <button class="btn danger sm" onclick="act_delP('${p.id}')">Remover</button></div>`).join('') || '<div class="hint">Nenhum competidor cadastrado ainda.</div>'}</div>
+      <h2 style="justify-content:space-between">Equipes <span class="count">${teams.length}</span>
+        <button class="btn primary sm" style="margin-left:auto" onclick="openTeam(null)">+ Criar equipe</button>
+      </h2>
+      ${!cats.length?'<div class="hint" style="margin-bottom:14px">Dica: cadastre <b>Categorias</b> na edição do campeonato para agrupar as equipes.</div>':''}
+      ${groups.map(g=>groupBlock(g.ct,g.list)).join('')}
+      ${noCat.length?groupBlock({id:'',name:'Sem categoria',type:'',size:''},noCat):''}
+      ${teams.length===0?'<div class="hint">Nenhuma equipe cadastrada. Clique em “+ Criar equipe”.</div>':''}
     </div>`;
 }
+function groupBlock(ct,list){
+  return `<div class="eq-group">
+    <div class="eq-ghead"><b>${esc(ct.name)}</b> ${ct.type?`<span class="cat-tag">${esc(ct.type)}</span>`:''} ${ct.size?`<span class="cat-size">👥 ${ct.size}</span>`:''} <span class="eq-count">${list.length} equipe(s)</span></div>
+    ${list.length?list.map(t=>{
+      const members=(t.members||[]).filter(m=>m.name).map(m=>`${m.leader?'👑 ':''}${esc(m.name)}`).join(', ');
+      return `<div class="eq-row">
+        <div class="eq-nm">${esc(t.name)}</div>
+        <div class="eq-members">${members||'<span class="hint">sem participantes</span>'}</div>
+        <button class="btn sm" onclick="openTeam('${t.id}')">✎ Editar</button>
+        <button class="btn danger sm" onclick="act_delP('${t.id}')">Remover</button>
+      </div>`;
+    }).join(''):'<div class="hint" style="padding:6px 0">Nenhuma equipe nesta categoria.</div>'}
+  </div>`;
+}
+/* modal criar/editar equipe */
+let teamDraft=null;
+const NACS=['Brasil','Argentina','Portugal','EUA','Outro'];
+function catSize(c,catId){ const ct=(c.categories||[]).find(x=>x.id===catId); return Math.max(1, ct?Number(ct.size)||1:1); }
+function buildMembers(t,size){
+  const src=(t&&t.members)?t.members:[]; const arr=[];
+  for(let i=0;i<size;i++) arr.push(Object.assign({name:'',nat:'Brasil',email:'',phone:'',bday:'',doc:'',leader:i===0}, src[i]||{}));
+  if(!arr.some(m=>m.leader)&&arr[0]) arr[0].leader=true;
+  return arr;
+}
+window.openTeam=(id)=>{
+  const c=active(); const cats=c.categories||[]; const t=id?c.participants.find(x=>x.id===id):null;
+  const catId=(t&&t.catId)||(cats[0]?.id||'');
+  teamDraft={ id:id||null, name:t?t.name:'', catId, members:buildMembers(t,catSize(c,catId)) };
+  renderTeamModal();
+};
+function renderTeamModal(){
+  const c=active(); const cats=c.categories||[];
+  const catSel = cats.length?`<select id="tm_cat" class="champ-pick" style="width:100%" onchange="setTeamCat(this.value)">${cats.map(ct=>`<option value="${ct.id}" ${ct.id===teamDraft.catId?'selected':''}>${esc(ct.name)} · ${esc(ct.type)} · 👥${ct.size}</option>`).join('')}</select>`
+    : `<div class="hint">Sem categorias — a equipe ficará sem categoria. Cadastre categorias na edição.</div>`;
+  let m=el('#modal'); if(!m){ m=document.createElement('div'); m.id='modal'; document.body.appendChild(m); }
+  m.innerHTML=`
+    <div class="modal-back" onclick="closeModal(event)">
+      <div class="modal-card" onclick="event.stopPropagation()" style="max-width:640px;max-height:88vh;overflow:auto">
+        <h3>${teamDraft.id?'Editar equipe':'Criar equipe'}</h3>
+        <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:8px">
+          <div style="flex:2;min-width:200px"><label class="fld">Nome da equipe</label><input type="text" id="tm_name" value="${esc(teamDraft.name)}" placeholder="Ex.: Bomba e Bolacha" oninput="teamDraft.name=this.value"></div>
+          <div style="flex:1;min-width:180px"><label class="fld">Categoria</label>${catSel}</div>
+        </div>
+        <div id="teamParts">${teamParts()}</div>
+        <div class="row" style="gap:10px;justify-content:flex-end;margin-top:18px">
+          <button class="btn ghost" onclick="closeModal()">Cancelar</button>
+          <button class="btn primary" onclick="saveTeam()">${teamDraft.id?'Salvar alterações':'Criar equipe'}</button>
+        </div>
+      </div>
+    </div>`;
+  setTimeout(()=>el('#tm_name')?.focus(),50);
+}
+function teamParts(){
+  return teamDraft.members.map((mem,i)=>`
+    <div class="part-card">
+      <div class="part-head"><span class="sub-blue">Participante ${i+1}</span>
+        <button type="button" class="ldr-btn ${mem.leader?'on':''}" onclick="setLeader(${i})">👑 Líder</button>
+      </div>
+      <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:10px">
+        <div style="flex:2;min-width:180px"><label class="fld">Nome do participante</label><input type="text" value="${esc(mem.name)}" oninput="setTeamMember(${i},'name',this.value)"></div>
+        <div style="flex:1;min-width:130px"><label class="fld">Nacionalidade</label><select class="champ-pick" style="width:100%" onchange="setTeamMember(${i},'nat',this.value)">${NACS.map(n=>`<option ${n===mem.nat?'selected':''}>${n}</option>`).join('')}</select></div>
+      </div>
+      <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:10px">
+        <div style="flex:2;min-width:180px"><label class="fld">E-mail</label><input type="email" value="${esc(mem.email)}" oninput="setTeamMember(${i},'email',this.value)"></div>
+        <div style="flex:1;min-width:120px"><label class="fld">Telefone</label><input type="text" value="${esc(mem.phone)}" oninput="setTeamMember(${i},'phone',this.value)"></div>
+        <div style="width:150px"><label class="fld">Aniversário</label><input type="date" value="${mem.bday||''}" oninput="setTeamMember(${i},'bday',this.value)"></div>
+      </div>
+      <div><label class="fld">Documento (CPF)</label><input type="text" value="${esc(mem.doc)}" placeholder="Número do CPF" oninput="setTeamMember(${i},'doc',this.value)"></div>
+    </div>`).join('');
+}
+window.setTeamMember=(i,k,v)=>{ if(teamDraft.members[i]) teamDraft.members[i][k]=v; };
+window.setLeader=(i)=>{ teamDraft.members.forEach((m,j)=>m.leader=(j===i)); el('#teamParts').innerHTML=teamParts(); };
+window.setTeamCat=(catId)=>{ const c=active(); teamDraft.catId=catId; const size=catSize(c,catId); const old=teamDraft.members;
+  teamDraft.members=[]; for(let i=0;i<size;i++) teamDraft.members.push(old[i]||{name:'',nat:'Brasil',email:'',phone:'',bday:'',doc:'',leader:i===0});
+  if(!teamDraft.members.some(m=>m.leader)&&teamDraft.members[0]) teamDraft.members[0].leader=true;
+  el('#teamParts').innerHTML=teamParts();
+};
+window.saveTeam=()=>{
+  const c=active(); const name=(teamDraft.name||'').trim(); if(!name){ el('#tm_name')?.focus(); return; }
+  const data={ name, catId:teamDraft.catId||'', members:teamDraft.members.map(m=>({name:(m.name||'').trim(),nat:m.nat,email:(m.email||'').trim(),phone:(m.phone||'').trim(),bday:m.bday||'',doc:(m.doc||'').trim(),leader:!!m.leader})) };
+  if(teamDraft.id){ const t=c.participants.find(x=>x.id===teamDraft.id); if(t) Object.assign(t,data); }
+  else c.participants.push(Object.assign({id:uid()},data));
+  teamDraft=null; save(); closeModal(); reBody();
+};
 /* ---- PROVAS (WODs) ---- */
 const RESULT_TYPES = { tempo:'Tempo', reps:'Repetições', carga:'Carga (kg)', amrap:'AMRAP (rounds+reps)', pontos:'Pontos' };
 const PUB_LABEL = { programada:'Publicação programada', imediata:'Publicação imediata', naopublicar:'Não publicar' };
