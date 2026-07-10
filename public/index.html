@@ -349,6 +349,17 @@
   .part-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
   .ldr-btn{background:var(--line);color:var(--steel);border:none;border-radius:20px;padding:6px 14px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
   .ldr-btn.on{background:linear-gradient(135deg,var(--arc-hi),var(--arc));color:#fff}
+  /* baterias */
+  .bat-item{border:1px solid var(--line);border-radius:11px;margin-bottom:9px;background:var(--raised);border-left:4px solid var(--arc)}
+  .bat-item.intervalo{border-left-color:var(--steel);opacity:.85}
+  .bat-row{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer}
+  .bat-time{font-family:'JetBrains Mono';font-weight:700;color:var(--arc-hi);white-space:nowrap;font-size:13px;flex:0 0 auto;min-width:96px}
+  .bat-item.intervalo .bat-time{color:var(--steel)}
+  .bat-main{flex:1;min-width:0}
+  .bat-title{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bat-meta{font-size:12px;color:var(--steel);margin-top:2px}
+  .bat-teams{padding:4px 14px 14px 122px;display:flex;flex-direction:column;gap:6px}
+  .bat-team{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13.5px;font-weight:600}
   .mini-box{font-family:'Archivo';font-size:11px;letter-spacing:1px;color:var(--arc-hi);border:1px solid var(--line);border-radius:6px;padding:2px 8px;vertical-align:middle;margin-left:6px}
 
   /* ---------- modal ---------- */
@@ -659,7 +670,107 @@ function panelKits(c, body){
     </div>`;
 }
 window.toggleKit = id=>{ const c=active(); if(!c.kits)c.kits={}; c.kits[id]=!c.kits[id]; save(); renderPanel(); };
-function panelBaterias(c, body){ body.innerHTML = `<div class="card"><h2>Baterias <span class="soon">Em breve</span></h2><div class="empty"><div style="font-size:40px;margin-bottom:10px">🗓</div><div class="big">Em breve</div><p>Organize os atletas em baterias (heats) por WOD e horário. Estamos preparando essa parte.</p></div></div>`; }
+function addMin(hhmm, min){
+  if(!hhmm||!/^\d{1,2}:\d{2}$/.test(hhmm)) return '';
+  const [h,m]=hhmm.split(':').map(Number); let t=h*60+m+(Number(min)||0);
+  t=((t%1440)+1440)%1440; return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');
+}
+function panelBaterias(c, body){
+  const bats=(c.baterias||[]).slice().sort((a,b)=>(a.inicio||'').localeCompare(b.inicio||''));
+  body.innerHTML = `
+    <div class="card">
+      <h2 style="justify-content:space-between">Baterias <span class="count">${bats.length}</span>
+        <span style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn primary sm" onclick="openBateria(null)">+ Criar evento</button>
+          ${bats.length?'<button class="btn danger sm" onclick="delAllBat()">Apagar todos</button>':''}
+        </span>
+      </h2>
+      <div class="hint" style="margin-bottom:16px">Crie baterias (heats) com horário, WOD, categoria e as equipes; ou intervalos. Ficam ordenadas por horário de início.</div>
+      ${bats.length ? bats.map(b=>{
+        const open=ui.batOpen===b.id; const fim=addMin(b.inicio,b.duracao);
+        const wod=(c.events||[]).find(e=>e.id===b.wodId); const cat=(c.categories||[]).find(x=>x.id===b.catId);
+        const teams=(b.teamIds||[]).map(id=>(c.participants||[]).find(p=>p.id===id)).filter(Boolean);
+        return `<div class="bat-item ${b.tipo==='intervalo'?'intervalo':''}">
+          <div class="bat-row" onclick="toggleBat('${b.id}')">
+            <div class="bat-time">${b.inicio||'--:--'}${fim?' – '+fim:''}</div>
+            <div class="bat-main">
+              <div class="bat-title">${esc(b.titulo||(b.tipo==='intervalo'?'Intervalo':'Bateria'))}</div>
+              <div class="bat-meta">${b.tipo==='intervalo'?'Intervalo':((wod?esc(wod.name):'—')+(cat?' · '+esc(cat.name):'')+' · '+teams.length+' equipe(s)')}</div>
+            </div>
+            <button class="btn sm" onclick="event.stopPropagation();openBateria('${b.id}')">✎</button>
+            <button class="btn danger sm" onclick="event.stopPropagation();delBat('${b.id}')">✕</button>
+            <button class="wod-exp">${open?'▲':'▸'}</button>
+          </div>
+          ${open&&b.tipo!=='intervalo'?`<div class="bat-teams">${teams.length?teams.map(t=>`<div class="bat-team">${t.members&&t.members.some(m=>m.leader)?'👑 ':''}${esc(t.name)}</div>`).join(''):'<div class="hint">Nenhuma equipe nesta bateria.</div>'}</div>`:''}
+        </div>`;
+      }).join('') : '<div class="hint">Nenhuma bateria criada. Clique em “+ Criar evento”.</div>'}
+    </div>`;
+}
+window.toggleBat = id=>{ ui.batOpen=ui.batOpen===id?null:id; renderPanel(); };
+window.delBat = id=>{ const c=active(); c.baterias=(c.baterias||[]).filter(b=>b.id!==id); save(); renderPanel(); };
+window.delAllBat = ()=>{ if(!confirm('Apagar todas as baterias?'))return; active().baterias=[]; save(); renderPanel(); };
+
+let batDraft=null;
+window.openBateria=(id)=>{
+  const c=active(); const b=id?(c.baterias||[]).find(x=>x.id===id):null;
+  batDraft = b ? Object.assign({teamIds:[]}, JSON.parse(JSON.stringify(b))) : { id:null, tipo:'bateria', titulo:'', inicio:'', duracao:9, wodId:'', catId:'', teamIds:[] };
+  renderBatModal();
+};
+function renderBatModal(){
+  const c=active(); const isInt=batDraft.tipo==='intervalo';
+  const wodOpts=`<option value="">Selecione</option>`+(c.events||[]).map(e=>`<option value="${e.id}" ${batDraft.wodId===e.id?'selected':''}>${esc(e.name)}</option>`).join('');
+  const catOpts=`<option value="">Todas / selecione</option>`+(c.categories||[]).map(x=>`<option value="${x.id}" ${batDraft.catId===x.id?'selected':''}>${esc(x.name)}</option>`).join('');
+  const avail=(c.participants||[]).filter(p=>(!batDraft.catId||p.catId===batDraft.catId)&&!batDraft.teamIds.includes(p.id));
+  const teamOpts=`<option value="">${batDraft.catId?'Selecione uma equipe':'Selecione uma categoria primeiro'}</option>`+avail.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  const added=batDraft.teamIds.map(id=>(c.participants||[]).find(p=>p.id===id)).filter(Boolean);
+  let m=el('#modal'); if(!m){ m=document.createElement('div'); m.id='modal'; document.body.appendChild(m); }
+  m.innerHTML=`
+    <div class="modal-back" onclick="closeModal(event)">
+      <div class="modal-card" onclick="event.stopPropagation()" style="max-width:640px;max-height:88vh;overflow:auto">
+        <h3>${batDraft.id?'Editar evento':'Criar evento'}</h3>
+        <label class="fld">Qual o tipo do evento?</label>
+        <div class="pick2" style="margin-bottom:16px">
+          <button class="pick-card ${!isInt?'on':''}" onclick="setBat('tipo','bateria')"><span class="pick-radio"></span> <b>Bateria</b></button>
+          <button class="pick-card ${isInt?'on':''}" onclick="setBat('tipo','intervalo')"><span class="pick-radio"></span> <b>Intervalo</b></button>
+        </div>
+        <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:14px">
+          <div style="flex:2;min-width:200px"><label class="fld">Título</label><input type="text" id="bt_title" value="${esc(batDraft.titulo||'')}" placeholder="Ex.: PROVA 1+2 RX - BATERIA 2" oninput="batDraft.titulo=this.value"></div>
+          <div style="width:130px"><label class="fld">Horário de início</label><input type="time" id="bt_ini" value="${batDraft.inicio||''}" oninput="batDraft.inicio=this.value"></div>
+          <div style="width:120px"><label class="fld">Duração (min)</label><input type="number" min="1" id="bt_dur" value="${batDraft.duracao||''}" oninput="batDraft.duracao=this.value"></div>
+        </div>
+        ${isInt?'':`
+        <div class="mod-sec"><div class="sub-blue">WOD</div>
+          <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:8px">
+            <div style="flex:1;min-width:180px"><label class="fld">Qual o WOD para esta bateria?</label><select class="champ-pick" style="width:100%" onchange="setBat('wodId',this.value)">${wodOpts}</select></div>
+            <div style="flex:1;min-width:180px"><label class="fld">Categoria</label><select class="champ-pick" style="width:100%" onchange="setBat('catId',this.value)">${catOpts}</select></div>
+          </div>
+        </div>
+        <div class="mod-sec"><div class="sub-blue">Equipes</div>
+          <div class="row" style="gap:10px;margin-top:8px;margin-bottom:12px">
+            <select id="bt_team" class="champ-pick" style="flex:1">${teamOpts}</select>
+            <button class="btn" onclick="addBatTeam()">+ Adicionar</button>
+          </div>
+          <div>${added.length?added.map(t=>`<div class="eq-row"><div class="eq-nm">${esc(t.name)}</div><div class="eq-members">${((c.categories||[]).find(x=>x.id===t.catId)||{}).name||''}</div><button class="btn danger sm" onclick="rmBatTeam('${t.id}')">Remover</button></div>`).join(''):'<div class="hint">Nenhuma equipe nesta bateria.</div>'}</div>
+        </div>`}
+        <div class="row" style="gap:10px;justify-content:flex-end;margin-top:18px">
+          <button class="btn ghost" onclick="closeModal()">Cancelar</button>
+          <button class="btn primary" onclick="saveBateria()">${batDraft.id?'Salvar alterações':'Criar evento'}</button>
+        </div>
+      </div>
+    </div>`;
+  setTimeout(()=>el('#bt_title')?.focus(),50);
+}
+window.setBat=(k,v)=>{ batDraft[k]=v; if(k==='catId') batDraft.teamIds=batDraft.teamIds.filter(id=>{const p=(active().participants||[]).find(x=>x.id===id);return p&&(!v||p.catId===v);}); renderBatModal(); };
+window.addBatTeam=()=>{ const v=el('#bt_team')?.value; if(v&&!batDraft.teamIds.includes(v)){ batDraft.teamIds.push(v); renderBatModal(); } };
+window.rmBatTeam=(id)=>{ batDraft.teamIds=batDraft.teamIds.filter(x=>x!==id); renderBatModal(); };
+window.saveBateria=()=>{
+  const c=active(); if(!batDraft.inicio){ alert('Informe o horário de início.'); el('#bt_ini')?.focus(); return; }
+  const data={ tipo:batDraft.tipo, titulo:(batDraft.titulo||'').trim(), inicio:batDraft.inicio, duracao:Number(batDraft.duracao)||0, wodId:batDraft.wodId||'', catId:batDraft.catId||'', teamIds:batDraft.tipo==='intervalo'?[]:batDraft.teamIds };
+  if(!c.baterias) c.baterias=[];
+  if(batDraft.id){ const b=c.baterias.find(x=>x.id===batDraft.id); if(b) Object.assign(b,data); }
+  else c.baterias.push(Object.assign({id:uid()},data));
+  batDraft=null; save(); closeModal(); renderPanel();
+};
 function panelDashboard(c, body){
   const cats=c.categories||[]; const local=[c.loc?.cidade,c.loc?.estado].filter(Boolean).join(' / ');
   const s=STATUS[c.status]||STATUS.rascunho;
