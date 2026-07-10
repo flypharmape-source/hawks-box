@@ -360,6 +360,9 @@
   .bat-meta{font-size:12px;color:var(--steel);margin-top:2px}
   .bat-teams{padding:4px 14px 14px 122px;display:flex;flex-direction:column;gap:6px}
   .bat-team{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13.5px;font-weight:600}
+  .res-toggle{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:4px;gap:4px;margin-bottom:16px}
+  .rt{background:none;border:none;color:var(--steel);font-family:inherit;font-size:14px;font-weight:700;padding:9px 18px;border-radius:8px;cursor:pointer}
+  .rt.on{background:linear-gradient(135deg,var(--arc-hi),var(--arc));color:#fff}
   .mini-box{font-family:'Archivo';font-size:11px;letter-spacing:1px;color:var(--arc-hi);border:1px solid var(--line);border-radius:6px;padding:2px 8px;vertical-align:middle;margin-left:6px}
 
   /* ---------- modal ---------- */
@@ -957,7 +960,20 @@ function tabResultados(c, body){
   if(!c.events.length){ body.innerHTML = emptyMsg('Sem provas','Adicione provas (WODs) primeiro para lançar resultados.','provas','Adicionar provas'); return; }
   if(!c.participants.length){ body.innerHTML = emptyMsg('Sem atletas','Cadastre atletas ou equipes para lançar resultados.','atletas','Cadastrar atletas'); return; }
   if(!ui.resEvent || !c.events.find(e=>e.id===ui.resEvent)) ui.resEvent = c.events[0].id;
+  const view = ui.resView||'resultado';
   body.innerHTML = `
+    <div class="res-toggle">
+      <button class="rt ${view==='resultado'?'on':''}" onclick="setResView('resultado')">📝 Resultado</button>
+      <button class="rt ${view==='rank'?'on':''}" onclick="setResView('rank')">🏆 Rank</button>
+    </div>
+    <div id="resArea"></div>`;
+  renderResArea();
+}
+window.setResView = v => { ui.resView=v; renderPanel(); };
+function renderResArea(){
+  const c=active(); const area=el('#resArea'); if(!area) return;
+  if((ui.resView||'resultado')==='rank'){ tabPlacar(c, area); return; }
+  area.innerHTML = `
     <div class="card">
       <h2>Lançar colocações</h2>
       <div class="ev-pick">${c.events.map(e=>`<button class="ev-chip ${e.id===ui.resEvent?'on':''}" onclick="pickEvent('${e.id}')">${esc(e.name)}</button>`).join('')}</div>
@@ -966,7 +982,7 @@ function tabResultados(c, body){
     </div>`;
   renderResList();
 }
-window.pickEvent = id => { ui.resEvent=id; renderTab(); };
+window.pickEvent = id => { ui.resEvent=id; renderResArea(); };
 function renderResList(){
   const c = active(); const box = el('#resList'); if(!box) return;
   const ev = c.events.find(e=>e.id===ui.resEvent);
