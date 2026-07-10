@@ -372,6 +372,20 @@
   .res-grid thead .rg-team{color:var(--steel);font-weight:700}
   .rg-in{width:80px;background:var(--raised);border:1px solid var(--line);color:var(--chalk);border-radius:8px;padding:8px;font-family:'JetBrains Mono';text-align:center;font-weight:700;font-size:13px}
   .rg-in:focus{border-color:var(--arc);outline:none}
+  /* leaderboard em tabela */
+  .lb-grid{border-collapse:collapse;width:100%;min-width:560px}
+  .lb-grid th,.lb-grid td{border-bottom:1px solid var(--line);padding:11px 10px;text-align:center;white-space:nowrap}
+  .lb-grid th{font-size:12px;color:var(--steel);font-weight:700;vertical-align:bottom}
+  .lb-sub{font-size:10px;color:var(--arc-hi);text-transform:uppercase;letter-spacing:.5px;margin-top:3px;font-weight:700}
+  .lb-grid .lb-pos{width:38px;font-family:'JetBrains Mono';font-weight:700;color:var(--steel)}
+  .lb-grid .lb-team{text-align:left;font-weight:700;position:sticky;left:0;background:var(--panel);z-index:1}
+  .lb-grid thead .lb-team{color:var(--steel)}
+  .lb-grid .lb-total{font-family:'JetBrains Mono';font-weight:700;font-size:17px;color:var(--arc-hi)}
+  .lb-cellpts{display:block;font-family:'JetBrains Mono';font-weight:700;font-size:15px}
+  .lb-cellraw{display:block;font-size:11px;color:var(--steel);font-family:'JetBrains Mono';margin-top:2px}
+  .lb-p1 .lb-pos{color:var(--gold)} .lb-p1 .lb-team{box-shadow:inset 4px 0 0 var(--gold)}
+  .lb-p2 .lb-pos{color:var(--silver)} .lb-p2 .lb-team{box-shadow:inset 4px 0 0 var(--silver)}
+  .lb-p3 .lb-pos{color:var(--bronze)} .lb-p3 .lb-team{box-shadow:inset 4px 0 0 var(--bronze)}
   .mini-box{font-family:'Archivo';font-size:11px;letter-spacing:1px;color:var(--arc-hi);border:1px solid var(--line);border-radius:6px;padding:2px 8px;vertical-align:middle;margin-left:6px}
 
   /* ---------- modal ---------- */
@@ -581,11 +595,12 @@ function standings(champ, catId){
     const detail = events.map(ev=>{
       const placement = placeByEv[ev.id][p.id]!=null ? placeByEv[ev.id][p.id] : null;
       const pts = eventPoints(champ, placement, n);
+      const raw = (champ.results[ev.id]||{})[p.id]||'';
       total += pts;
       if(placement===1) wins++;
       if(placement!=null && placement<best) best=placement;
       if(tbWod && ev.id===tbWod && placement!=null) tbPlace=placement;
-      return { ev, placement, pts };
+      return { ev, placement, pts, raw };
     });
     return { p, total, wins, best, tbPlace, detail };
   });
@@ -957,6 +972,7 @@ function renderLeaderboard(){
   if(cats.length && (!ui.lbCat || !cats.find(x=>x.id===ui.lbCat))) ui.lbCat=cats[0].id;
   const catId = cats.length?ui.lbCat:'';
   const rows = standings(c, catId);
+  const events = (c.events||[]).filter(ev=> !catId || (((ev.catDetails||{})[catId]||{}).ativa!==false));
   const ruleTxt = golf ? 'MENOS PONTOS VENCE' : 'MAIS PONTOS VENCE';
   const dir = golf ? '▲ menor' : '▼ maior';
   const catSel = cats.length ? `<select class="champ-pick" onchange="setLbCat(this.value)">${cats.map(x=>`<option value="${x.id}" ${x.id===catId?'selected':''}>${esc(x.name)}</option>`).join('')}</select>` : '';
@@ -965,8 +981,16 @@ function renderLeaderboard(){
       <div class="board-title">${esc(c.name)}</div>
       <div class="row" style="gap:10px;align-items:center">${catSel}<div class="board-rule ${golf?'golf':''}">${ruleTxt} · <span class="dir">${dir}</span></div></div>
     </div>
-    <div class="hint" style="margin-bottom:6px">${rows.length} competidor(es)${catId?' · categoria selecionada':''} · toque numa linha para ver a quebra por prova</div>
-    ${rows.length?rows.map((r,i)=>lbRow(c,r,i,golf)).join(''):'<div class="hint">Nenhuma equipe nesta categoria.</div>'}
+    <div class="hint" style="margin-bottom:10px">${rows.length} competidor(es)${catId?' · categoria selecionada':''}</div>
+    ${rows.length? `<div class="res-scroll"><table class="lb-grid">
+      <thead><tr><th class="lb-pos">#</th><th class="lb-team">Equipe</th><th class="lb-total">Total</th>${events.map(ev=>`<th>${esc(ev.name)}<div class="lb-sub">Pts · ${RESULT_SHORT[wodTypeFor(ev,catId)]||'Res'}</div></th>`).join('')}</tr></thead>
+      <tbody>${rows.map((r,i)=>`<tr class="${i<3?'lb-p'+(i+1):''}">
+        <td class="lb-pos">${i+1}</td>
+        <td class="lb-team">${esc(r.p.name)}</td>
+        <td class="lb-total">${r.total}</td>
+        ${r.detail.map(d=>`<td><span class="lb-cellpts">${d.pts}</span><span class="lb-cellraw">${d.raw?esc(d.raw):(d.placement==null?'—':'')}</span></td>`).join('')}
+      </tr>`).join('')}</tbody>
+    </table></div>` : '<div class="hint">Nenhuma equipe nesta categoria.</div>'}
     <div class="row no-print" style="margin-top:18px;gap:9px">
       <button class="btn sm" onclick="syncFromServer()">Sincronizar</button>
       <button class="btn sm" onclick="exportCSV()">Exportar CSV</button>
