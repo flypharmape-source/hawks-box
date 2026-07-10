@@ -167,6 +167,19 @@ app.delete('/api/championships/:id', authRequired, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'falha ao excluir' }); }
 });
 
+// ---- página pública (sem login): leaderboard/baterias/wods ----
+app.get('/api/public/:id', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT data FROM championships WHERE id=$1', [req.params.id]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'não encontrado' });
+    const d = r.rows[0].data || {};
+    // remove dados pessoais dos participantes e dados internos
+    (d.participants || []).forEach(p => { (p.members || []).forEach(m => { delete m.email; delete m.phone; delete m.doc; delete m.bday; delete m.nat; }); });
+    delete d.kits;
+    res.json(d);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'falha' }); }
+});
+
 app.get('*', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const PORT = process.env.PORT || 3000;
